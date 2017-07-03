@@ -104,11 +104,6 @@ private:
 	void OnImageFileChange();
 
 private:
-	//load moc and model file
-	//load drawable data
-	//load parameters
-	//load texture
-
 	void LoadMoc();
 	void FreeMoc();
 	void LoadTexture();
@@ -119,6 +114,11 @@ private:
 	void LoadAnimation();
 	void FreeAnimation();
 #endif
+
+private:
+	//! Copying not allowed
+	Cubism3UIComponent(const Cubism3UIComponent&);
+	Cubism3UIComponent& operator=(const Cubism3UIComponent&);
 
 private:
 	//bool m_modelLoaded;

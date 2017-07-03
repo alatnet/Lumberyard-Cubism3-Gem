@@ -23,7 +23,11 @@
 
 Cubism3UIComponent::Cubism3UIComponent() {
 	this->transform = AZ::Matrix4x4::CreateIdentity();
-	this->prevTransform = AZ::Matrix4x4::CreateIdentity();
+	this->prevTransform = AZ::Matrix4x4::CreateZero();
+
+	this->moc = nullptr;
+	this->model = nullptr;
+	this->texture = nullptr;
 }
 
 Cubism3UIComponent::~Cubism3UIComponent() {
@@ -125,11 +129,11 @@ void Cubism3UIComponent::Render() {
 
 		csmUpdateModel(this->model);
 
-		EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformToViewport, this->prevTransform);
+		EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformToViewport, this->transform);
 
 		bool transformUpdated = false;
 		if (this->transform != this->prevTransform) {
-			this->transform = this->prevTransform;
+			this->prevTransform = this->transform;
 			transformUpdated = true;
 		}
 
@@ -140,7 +144,7 @@ void Cubism3UIComponent::Render() {
 		else renderer->SetTexture(renderer->GetWhiteTextureId());
 
 		for (Drawable * d : this->drawables) {
-			d->update(this->model, this->prevTransform, transformUpdated);
+			d->update(this->model, this->transform, transformUpdated);
 
 			if (d->visible) {
 				int flags = GS_BLSRC_ONE | GS_BLSRC_ONEMINUSSRCALPHA;
@@ -222,7 +226,7 @@ void Cubism3UIComponent::LoadMoc() {
 	}
 	this->parameters.shrink_to_fit(); //free up unused memory
 
-	//load vector data
+	//load drawable data
 	const char** drawableNames = csmGetDrawableIds(this->model);
 	const csmFlags* constFlags = csmGetDrawableConstantFlags(this->model);
 	const csmFlags* dynFlags = csmGetDrawableDynamicFlags(this->model);
@@ -248,6 +252,7 @@ void Cubism3UIComponent::LoadMoc() {
 		d->drawOrder = drawOrder[i];
 		d->renderOrder = renderOrder[i];
 		d->opacity = opacities[i];
+		d->packedOpacity = ColorF(1, 1, 1, d->opacity).pack_argb8888();
 		d->maskCount = maskCounts[i];
 		d->maskIndices = masks[i];
 
@@ -259,7 +264,7 @@ void Cubism3UIComponent::LoadMoc() {
 		for (int v = 0; v < d->vertCount; v++) {
 			d->data[v].xyz = Vec3(0.0f, 0.0f, 0.0f);
 			d->data[v].st = Vec2(0.0f, 0.0f);
-			d->data[v].color.dcolor = ColorF(1, 1, 1, d->opacity).pack_argb8888();
+			d->data[v].color.dcolor = d->packedOpacity;
 		}
 
 		d->numIndices = numIndexes[i];
@@ -333,6 +338,7 @@ void Cubism3UIComponent::LoadAnimation() {
 
 			this->animations.push_back(layer);
 		}
+		this->animations.shrink_to_fit();
 	}
 
 	//load sink
