@@ -1,0 +1,24 @@
+{
+    "none": {
+        "Source": [
+            "Source/StdAfx.cpp",
+            "Source/StdAfx.h"
+        ]
+    },
+    "auto": {
+      "Include": [
+        "Include/Cubism3/Cubism3Bus.h",
+        "Source/Live2DCubismCore.h",
+        "Include/Cubism3/Cubism3UIBus.h"
+      ],
+      "Source": [
+        "Source/Cubism3Module.cpp",
+        "Source/Cubism3SystemComponent.cpp",
+        "Source/Cubism3SystemComponent.h",
+        "Source/Cubism3UIComponent.cpp",
+        "Source/Cubism3UIComponent.h",
+        "Source/Live2DCubismFramework.h",
+        "Source/Live2DCubismFrameworkInternal.h"
+      ]
+    }
+}

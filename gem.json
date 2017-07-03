@@ -1,0 +1,20 @@
+{
+  "Dependencies": [
+    {
+      "Uuid": "0fefab3f13364722b2eab3b96ce2bf20",
+      "VersionConstraints": [
+        "~>0.1"
+      ],
+      "_comment": "LyShine"
+    }
+  ],
+  "GemFormatVersion": 3,
+  "Uuid": "0523ea9b22264a73a494263c165760e6",
+  "Name": "Cubism3",
+  "DisplayName": "Cubism3",
+  "Version": "0.1.0",
+  "LinkType": "Dynamic",
+  "Summary": "Live 2D Cubism 3 Gem",
+  "Tags": [ "Live 2D", "Cubism 3" ],
+  "IconPath": "preview.png"
+}

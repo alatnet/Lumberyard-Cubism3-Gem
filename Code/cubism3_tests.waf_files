@@ -1,0 +1,7 @@
+{
+    "auto": {
+        "Tests": [
+            "Tests/Cubism3Test.cpp"
+        ]
+    }
+}
