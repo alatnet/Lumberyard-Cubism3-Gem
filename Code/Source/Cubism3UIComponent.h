@@ -6,10 +6,19 @@
 
 #include <AzCore/Component/Component.h>
 #include <AzCore/Serialization/SerializeContext.h>
+
+#include <AzCore/Math/Matrix4x4.h>
 #include <AzCore/Math/Vector3.h>
-#include <AzCore/Component/TickBus.h>
+//#include <AzCore/Component/TickBus.h>
 
 #include "../../Engine/LmbrCentral/include/LmbrCentral/Rendering/MaterialAsset.h"
+
+#include "Live2DCubismCore.h"
+#include "Live2DCubismFramework.h"
+#include "Live2DCubismFrameworkInternal.h"
+
+#include <ITexture.h>
+#include <VertexFormats.h>
 
 class Cubism3UIComponent
 	: public AZ::Component

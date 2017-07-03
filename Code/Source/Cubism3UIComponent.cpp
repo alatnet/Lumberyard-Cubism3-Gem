@@ -1,9 +1,5 @@
 #include "StdAfx.h"
 
-#include "Live2DCubismCore.h"
-#include "Live2DCubismFramework.h"
-#include "Live2DCubismFrameworkInternal.h"
-
 #include "Cubism3UIComponent.h"
 
 #include <AzCore/Math/Crc.h>
@@ -17,10 +13,10 @@
 #include <LyShine/IDraw2d.h>
 #include <LyShine/UiSerializeHelpers.h>
 #include <LyShine/Bus/UiElementBus.h>
-#include <LyShine/Bus/UiCanvasBus.h>
+//#include <LyShine/Bus/UiCanvasBus.h>
 #include <LyShine/Bus/UiTransformBus.h>
 #include <LyShine/Bus/UiTransform2dBus.h>
-#include <LyShine/ISprite.h>
+//#include <LyShine/ISprite.h>
 #include <LyShine/IUiRenderer.h>
 
 Cubism3UIComponent::Cubism3UIComponent() {
@@ -194,7 +190,7 @@ void Cubism3UIComponent::LoadObject() {
 
 	gEnv->pFileIO->Close(fileHandler);
 
-	this->moc = csmReviveMocInPlace(mocBuf, mocSize);
+	this->moc = csmReviveMocInPlace(mocBuf, (unsigned int)mocSize);
 
 	//load model
 	unsigned int modelSize = csmGetSizeofModel(this->moc);
@@ -330,7 +326,7 @@ void Cubism3UIComponent::Drawable::update(csmModel* model, AZ::Matrix4x4 transfo
 	if (this->dynFlags & csmOpacityDidChange) {
 		this->opacity = csmGetDrawableOpacities(model)[this->id];
 
-		for (int i = 0; i < this->vertCount; i++) this->data[i].color = ColorF(1, 1, 1, this->opacity).pack_argb8888();
+		for (int i = 0; i < this->vertCount; i++) this->data[i].color.dcolor = ColorF(1, 1, 1, this->opacity).pack_argb8888();
 	}
 	
 	if (this->dynFlags & csmDrawOrderDidChange) this->drawOrder = csmGetDrawableDrawOrders(model)[this->id];
