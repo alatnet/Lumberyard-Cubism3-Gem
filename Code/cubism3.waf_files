@@ -9,9 +9,7 @@
     "Include": [
       "Include/Cubism3/Cubism3Bus.h",
       "Source/Live2DCubismCore.h",
-      "Include/Cubism3/Cubism3UIBus.h",
-      "Source/Live2DCubismFramework.h",
-      "Source/Live2DCubismFrameworkInternal.h"
+      "Include/Cubism3/Cubism3UIBus.h"
     ],
     "Source": [
       "Source/Cubism3Module.cpp",
@@ -19,21 +17,6 @@
       "Source/Cubism3SystemComponent.h",
       "Source/Cubism3UIComponent.cpp",
       "Source/Cubism3UIComponent.h"
-    ],
-    "Source/Framework": [
-      "Source/Framework/Animation.c",
-      "Source/Framework/FloatBlendFunction.c",
-      "Source/Framework/Json.c",
-      "Source/Framework/MotionJson.c",
-      "Source/Framework/String.c",
-      "Source/Framework/AnimationSegmentEvaluationFunction.c",
-      "Source/Framework/FloatSink.c",
-      "Source/Framework/Local.h",
-      "Source/Framework/ParameterExtensions.c",
-      "Source/Framework/AnimationState.c",
-      "Source/Framework/Hash.c",
-      "Source/Framework/ModelExtensions.c",
-      "Source/Framework/PartExtensions.c"
     ]
   }
 }  

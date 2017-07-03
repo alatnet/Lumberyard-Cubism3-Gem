@@ -9,7 +9,6 @@
 
 #include <AzCore/Math/Matrix4x4.h>
 #include <AzCore/Math/Vector3.h>
-//#include <AzCore/Component/TickBus.h>
 
 #include "../../Engine/LmbrCentral/include/LmbrCentral/Rendering/MaterialAsset.h"
 
@@ -22,6 +21,8 @@
 
 #include <ITexture.h>
 #include <VertexFormats.h>
+
+#include <AZCore/RTTI/TypeInfo.h>
 
 class Cubism3UIComponent
 	: public AZ::Component
@@ -57,43 +58,39 @@ public:  // static member functions
 
 protected: // member functions
 		// AZ::Component
-		void Init() override;
-		void Activate() override;
-		void Deactivate() override;
-		// ~AZ::Component
-
-		// AZ::TickBus
-		//void OnTick(float deltaTime, AZ::ScriptTimePoint time);
-		// ~AZ::TickBus
+	void Init() override;
+	void Activate() override;
+	void Deactivate() override;
+	// ~AZ::Component
 
 private:
-	class MocAsset {
-	public:
-		AZ_TYPE_INFO(MocAsset, "{7DB33C8B-8498-404C-A301-B0269AE60388}")
-		static const char* GetFileFilter() {
-			return "*.moc3";
-		}
-	};
-
 	/*class Cubism3Asset {
 	public:
-		AZ_TYPE_INFO(Cubism3Asset, "")
+		AZ_TYPE_INFO(Cubism3Asset, "{A679F1C0-60A1-48FB-8107-A68195D76CF2}")
 			static const char* GetFileFilter() {
 			return "*.model3.json";
 		}
 	};*/
 
-	class MotionAsset {
+	/*class MotionAsset {
 	public:
-		AZ_TYPE_INFO(MotionAsset, "")
+		AZ_TYPE_INFO(MotionAsset, "{DC1BA430-5D5E-4A09-BA5F-1FB05180C6A1}")
 		static const char* GetFileFilter() {
 			return "*.motion3.json";
+		}
+	};*/
+
+	class MocAsset {
+	public:
+		AZ_TYPE_INFO(MocAsset, "{7DB33C8B-8498-404C-A301-B0269AE60388}")
+			static const char* GetFileFilter() {
+			return "*.moc3";
 		}
 	};
 
 	AzFramework::SimpleAssetReference<MocAsset> m_mocPathname;
 	AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> m_imagePathname;
-	
+
 	//AZStd::vector<AzFramework::SimpleAssetReference<MotionAsset>> m_animationPathnames;
 
 	//AzFramework::SimpleAssetReference<MotionAsset> *m_AnimationPathname;
@@ -103,7 +100,28 @@ private:
 	void ReleaseObject();
 
 private:
-	bool m_modelLoaded;
+	void OnMocFileChange();
+	void OnImageFileChange();
+
+private:
+	//load moc and model file
+	//load drawable data
+	//load parameters
+	//load texture
+
+	void LoadMoc();
+	void FreeMoc();
+	void LoadTexture();
+	void FreeTexture();
+
+
+#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+	void LoadAnimation();
+	void FreeAnimation();
+#endif
+
+private:
+	//bool m_modelLoaded;
 
 	csmMoc *moc;
 	//void * mocBuf;
@@ -112,7 +130,7 @@ private:
 	ITexture * texture;
 
 	//animation stuff
-	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 	csmFloatSink* sink;
 	//void* sinkBuf;
 
@@ -133,13 +151,13 @@ private:
 
 		/// Blend weight.
 		float Weight;
-		
+
 		///is the animation enabled
 		bool enabled;
 	} AnimationLayer;
 
 	AZStd::vector<AnimationLayer*> animations;
-	#endif
+#endif
 
 	//parameter stuff
 	typedef struct Parameter {
@@ -152,7 +170,7 @@ private:
 	AZStd::vector<Parameter*> parameters;
 
 	//drawable stuff
-	AZ::Matrix4x4 transform;
+	AZ::Matrix4x4 prevTransform, transform;
 
 	typedef struct Drawable {
 		AZStd::string name; //csmGetDrawableIds
@@ -163,6 +181,7 @@ private:
 		int drawOrder; //csmGetDrawableDrawOrders //?
 		int renderOrder; //csmGetDrawableRenderOrders //?
 		float opacity; //csmGetDrawableOpacities //color (alpha) //update as needed?
+		uint32 packedOpacity;
 		int maskCount; //csmGetDrawableMaskCounts //ignore?
 		const int *maskIndices; //csmGetDrawableMasks //ignore?
 
@@ -176,7 +195,7 @@ private:
 		const unsigned short * indices; //csmGetDrawableIndices
 
 		bool visible;
-		
+
 		void update(csmModel* model, AZ::Matrix4x4 transform, bool transformUpdate);
 	} Drawable;
 
