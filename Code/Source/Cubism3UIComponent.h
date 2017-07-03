@@ -14,8 +14,11 @@
 #include "../../Engine/LmbrCentral/include/LmbrCentral/Rendering/MaterialAsset.h"
 
 #include "Live2DCubismCore.h"
+
+#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 #include "Live2DCubismFramework.h"
 #include "Live2DCubismFrameworkInternal.h"
+#endif
 
 #include <ITexture.h>
 #include <VertexFormats.h>
@@ -91,7 +94,7 @@ private:
 	AzFramework::SimpleAssetReference<MocAsset> m_mocPathname;
 	AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> m_imagePathname;
 	
-	AZStd::vector<AzFramework::SimpleAssetReference<MotionAsset>> m_animationPathnames;
+	//AZStd::vector<AzFramework::SimpleAssetReference<MotionAsset>> m_animationPathnames;
 
 	//AzFramework::SimpleAssetReference<MotionAsset> *m_AnimationPathname;
 
@@ -106,11 +109,13 @@ private:
 	//void * mocBuf;
 	csmModel * model;
 	//void * modelBuf;
-	csmFloatSink* sink;
-	//void* sinkBuf;
 	ITexture * texture;
 
 	//animation stuff
+	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+	csmFloatSink* sink;
+	//void* sinkBuf;
+
 	/*struct animStruct {
 		csmAnimation* anim;
 		//void* buff;
@@ -134,6 +139,7 @@ private:
 	} AnimationLayer;
 
 	AZStd::vector<AnimationLayer*> animations;
+	#endif
 
 	//parameter stuff
 	typedef struct Parameter {

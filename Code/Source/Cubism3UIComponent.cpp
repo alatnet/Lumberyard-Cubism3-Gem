@@ -36,7 +36,10 @@ void Cubism3UIComponent::Reflect(AZ::ReflectContext* context) {
 			->Version(1, nullptr)
 			->Field("MocFile", &Cubism3UIComponent::m_mocPathname)
 			->Field("ImageFile", &Cubism3UIComponent::m_imagePathname)
-			->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames);
+			#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+			->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames)
+			#endif
+			;
 
 		AZ::EditContext* ec = serializeContext->GetEditContext();
 		/*if (ec) {
@@ -125,21 +128,28 @@ void Cubism3UIComponent::Deactivate() {
 //}
 
 void Cubism3UIComponent::Render() {
-	if (this->m_modelLoaded) {
-		for (AnimationLayer* layer : this->animations) {
-			if (layer->enabled) {
-				csmTickAnimationState(&layer->State, gEnv->pTimer->GetFrameTime());
-				csmEvaluateAnimation(
-					layer->Animation,
-					&layer->State,
-					layer->Blend,
-					layer->Weight,
-					this->sink
-				);
-			}
-		}
+	const char* profileMarker = "UI_CUBISM3";
+	gEnv->pRenderer->PushProfileMarker(profileMarker);
 
-		csmFlushFloatSink(this->sink, this->model, 0, 0);
+	if (this->m_modelLoaded) {
+		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+		if (this->animations.size() != 0) {
+			for (AnimationLayer* layer : this->animations) {
+				if (layer->enabled) {
+					csmTickAnimationState(&layer->State, gEnv->pTimer->GetFrameTime());
+					csmEvaluateAnimation(
+						layer->Animation,
+						&layer->State,
+						layer->Blend,
+						layer->Weight,
+						this->sink
+					);
+				}
+			}
+
+			csmFlushFloatSink(this->sink, this->model, 0, 0);
+		}
+		#endif
 
 		csmUpdateModel(this->model);
 
@@ -159,12 +169,12 @@ void Cubism3UIComponent::Render() {
 			d->update(this->model, localtransform, transformUpdated);
 
 			if (d->visible) {
-				int flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
+				int flags = GS_BLSRC_ONE | GS_BLSRC_ONEMINUSSRCALPHA;
 
 				if (d->constFlags & csmBlendAdditive) {
 					flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
 				} else if (d->constFlags & csmBlendMultiplicative) {
-					flags = GS_BLSRC_ZERO | GS_BLSRC_DSTCOL;
+					flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
 				}
 
 				renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
@@ -175,6 +185,8 @@ void Cubism3UIComponent::Render() {
 	} else {
 		//draw a blank space
 	}
+
+	gEnv->pRenderer->PopProfileMarker(profileMarker);
 }
 
 void Cubism3UIComponent::LoadObject() {
@@ -199,6 +211,7 @@ void Cubism3UIComponent::LoadObject() {
 	this->model = csmInitializeModelInPlace(this->moc, modelBuf, modelSize);
 
 	//load animations
+	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 	if (this->m_animationPathnames.size() != 0) {
 		for (AzFramework::SimpleAssetReference<MotionAsset> asset : this->m_animationPathnames) {
 			AZ::IO::HandleType animFileHandler;
@@ -229,6 +242,12 @@ void Cubism3UIComponent::LoadObject() {
 		}
 	}
 
+	//load sink
+	unsigned int sinkSize = csmGetSizeofFloatSink(this->model);
+	void *sinkBuf = malloc(sinkSize); //free
+	this->sink = csmInitializeFloatSinkInPlace(this->model, sinkBuf, sinkSize);
+	#endif
+
 	//get the parameters of the model
 	const char** paramNames = csmGetParameterIds(this->model);
 
@@ -242,11 +261,6 @@ void Cubism3UIComponent::LoadObject() {
 
 		this->parameters.push_back(p);
 	}
-
-	//load sink
-	unsigned int sinkSize = csmGetSizeofFloatSink(this->model);
-	void *sinkBuf = malloc(sinkSize); //free
-	this->sink = csmInitializeFloatSinkInPlace(this->model, sinkBuf, sinkSize);
 
 	//load the texture
 	this->texture = gEnv->pSystem->GetIRenderer()->EF_LoadTexture(this->m_imagePathname.GetAssetPath().c_str(), FT_DONT_STREAM);
@@ -304,13 +318,15 @@ void Cubism3UIComponent::ReleaseObject() {
 	this->m_modelLoaded = false;
 
 	this->texture->Release(); //free the texture
+
+	for (Drawable * d : this->drawables) delete d->data; //delete the vector data
+	this->drawables.clear(); //clear the drawables vector
+
+	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 	free(this->sink); //free the float sink
-
-	for (Drawable * d : this->drawables) delete d->data;
-	this->drawables.clear();
-
 	for (AnimationLayer* layer : this->animations) free(layer->Animation); //free each animation
 	this->animations.clear(); //clear the animations vector
+	#endif
 
 	this->parameters.clear(); //clear the parameters vector
 	
