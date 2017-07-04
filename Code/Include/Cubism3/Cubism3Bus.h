@@ -3,11 +3,9 @@
 
 #include <AzCore/EBus/EBus.h>
 
-namespace Cubism3
-{
+namespace Cubism3 {
     class Cubism3Requests
-        : public AZ::EBusTraits
-    {
+        : public AZ::EBusTraits {
 
     public:
         static const AZ::EBusHandlerPolicy HandlerPolicy = AZ::EBusHandlerPolicy::Single;
