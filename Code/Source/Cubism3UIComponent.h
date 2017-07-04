@@ -70,14 +70,27 @@ namespace Cubism3 {
 		void SetTexturePathname(AZStd::string path);
 		AZStd::string GetMocPathname();
 		AZStd::string GetTexturePathname();
+		
 		//parameters
 		int GetParameterCount();
 		int GetParameterIdByName(AZStd::string name);
 		AZStd::string GetParameterName(int index);
-		float GetParameterMax(int index);
-		float GetParameterMin(int index);
-		float GetParameterValue(int index);
-		void SetParameterValue(int index, float value);
+		
+		//parameters by index
+		float GetParameterMaxI(int index);
+		float GetParameterMinI(int index);
+		float GetParameterValueI(int index);
+		void SetParameterValueI(int index, float value);
+		
+		//parameters by name
+		float GetParameterMaxS(AZStd::string name);
+		float GetParameterMinS(AZStd::string name);
+		float GetParameterValueS(AZStd::string name);
+		void SetParameterValueS(AZStd::string name, float value);
+
+		//rendertype
+		void SetRenderType(Cubism3UIInterface::RenderType rt);
+		Cubism3UIInterface::RenderType GetRenderType();
 		// ~Cubism3UIBus
 
 	private:
@@ -185,6 +198,7 @@ namespace Cubism3 {
 		} Parameter;
 
 		AZStd::vector<Parameter*> parameters;
+		AZStd::unordered_map<AZStd::string, int> parametersMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
 		//drawable stuff
 		AZ::Matrix4x4 prevTransform, transform;
@@ -203,19 +217,25 @@ namespace Cubism3 {
 			const int *maskIndices; //csmGetDrawableMasks //ignore?
 
 			int vertCount;
-			SVF_P3F_C4B_T2F * data; //csmGetDrawableVertexPositions, csmGetDrawableVertexUvs //update only when needed to?
+			SVF_P3F_C4B_T2F * verts; //csmGetDrawableVertexPositions, csmGetDrawableVertexUvs //update only when needed to?
 
-			const csmVector2* rawdata;
+			const csmVector2* rawVerts;
 			const csmVector2* rawUVs;
 
-			int numIndices; //csmGetDrawableIndexCounts
+			int indicesCount; //csmGetDrawableIndexCounts
 			const unsigned short * indices; //csmGetDrawableIndices
 
 			bool visible;
 
-			void update(csmModel* model, AZ::Matrix4x4 transform, bool transformUpdate);
+			void update(csmModel* model, AZ::Matrix4x4 transform, bool transformUpdate, bool &drawOrderChanged, bool &renderOrderChanged);
 		} Drawable;
 
 		AZStd::vector<Drawable*> drawables;
+
+		int drawCount;
+		const int* drawOrder;
+		const int* renderOrder;
+
+		Cubism3UIInterface::RenderType rType;
 	};
 }

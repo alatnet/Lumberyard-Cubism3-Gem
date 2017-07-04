@@ -29,6 +29,8 @@ namespace Cubism3 {
 		this->moc = nullptr;
 		this->model = nullptr;
 		this->texture = nullptr;
+
+		this->rType = rtSequential;
 	}
 
 	Cubism3UIComponent::~Cubism3UIComponent() {
@@ -45,6 +47,7 @@ namespace Cubism3 {
 				->Version(1)
 				->Field("MocFile", &Cubism3UIComponent::m_mocPathname)
 				->Field("ImageFile", &Cubism3UIComponent::m_imagePathname)
+				->Field("RenderType", &Cubism3UIComponent::rType)
 			#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 				->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames)
 			#endif
@@ -59,11 +62,17 @@ namespace Cubism3 {
 					->Attribute(AZ::Edit::Attributes::ViewportIcon, "Editor/Icons/Components/Viewport/CharacterPhysics.png")
 					->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC("UI", 0x27ff46b0));
 
-				editInfo->DataElement("Moc", &Cubism3UIComponent::m_mocPathname, "Moc path", "The Moc path. Can be overridden by another component such as an interactable.")
+				editInfo->DataElement(0, &Cubism3UIComponent::m_mocPathname, "Moc path", "The Moc path. Can be overridden by another component such as an interactable.")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnMocFileChange);
 
-				editInfo->DataElement("Image", &Cubism3UIComponent::m_imagePathname, "Image path", "The Image path. Can be overridden by another component such as an interactable.")
+				editInfo->DataElement(0, &Cubism3UIComponent::m_imagePathname, "Image path", "The Image path. Can be overridden by another component such as an interactable.")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnImageFileChange);
+
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::rType, "Render Type", "How to render the Cubism3 Model.\nSequential - One drawable after the other.\nDraw - Draw based on draw order.\nRender - Draw based on render order.")
+					->EnumAttribute(Cubism3UIInterface::RenderType::rtSequential, "Sequential")
+					->EnumAttribute(Cubism3UIInterface::RenderType::rtDraw, "Draw")
+					->EnumAttribute(Cubism3UIInterface::RenderType::rtRender, "Render");
+
 			}
 
 			AZ::BehaviorContext* behaviorContext = azrtti_cast<AZ::BehaviorContext*>(context);
@@ -79,10 +88,16 @@ namespace Cubism3 {
 					EBUS_METHOD(GetParameterCount)
 					EBUS_METHOD(GetParameterIdByName)
 					EBUS_METHOD(GetParameterName)
-					EBUS_METHOD(GetParameterMax)
-					EBUS_METHOD(GetParameterMin)
-					EBUS_METHOD(GetParameterValue)
-					EBUS_METHOD(SetParameterValue)
+					//parameters by index
+					EBUS_METHOD(GetParameterMaxI)
+					EBUS_METHOD(GetParameterMinI)
+					EBUS_METHOD(GetParameterValueI)
+					EBUS_METHOD(SetParameterValueI)
+					//parameters by name
+					EBUS_METHOD(GetParameterMaxS)
+					EBUS_METHOD(GetParameterMinS)
+					EBUS_METHOD(GetParameterValueS)
+					EBUS_METHOD(SetParameterValueS)
 					;
 				#undef EBUS_METHOD
 				/*	
@@ -153,23 +168,72 @@ namespace Cubism3 {
 			if (this->texture != nullptr) renderer->SetTexture(texture->GetTextureID());
 			else renderer->SetTexture(renderer->GetWhiteTextureId());
 
-			for (Drawable * d : this->drawables) {
-				d->update(this->model, this->transform, transformUpdated);
+			bool drawOrderChanged = false, renderOrderChanged = false;
 
-				if (d->visible) {
-					int flags = GS_BLSRC_ONE | GS_BLSRC_ONEMINUSSRCALPHA;
+			switch (this->rType) {
+			case rtSequential:
+				for (Drawable * d : this->drawables) {
+					d->update(this->model, this->transform, transformUpdated, drawOrderChanged, renderOrderChanged);
 
-					if (d->constFlags & csmBlendAdditive) {
-						flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
-					} else if (d->constFlags & csmBlendMultiplicative) {
-						flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+					if (d->visible) {
+						int flags = GS_BLSRC_ONE | GS_BLSRC_ONEMINUSSRCALPHA;
+
+						if (d->constFlags & csmBlendAdditive) {
+							flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
+						} else if (d->constFlags & csmBlendMultiplicative) {
+							flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+						}
+
+						renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
+						renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
+						renderer->DrawDynVB(d->verts, (uint16 *)d->indices, d->vertCount, d->indicesCount, prtTriangleList);
 					}
-
-					renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
-					renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
-					renderer->DrawDynVB(d->data, (uint16 *)d->indices, d->vertCount, d->numIndices, prtTriangleList);
 				}
+				break;
+			case rtDraw:
+				for (int i = 0; i < this->drawCount; i++) {
+					Drawable * d = this->drawables[this->drawOrder[i]];
+					d->update(this->model, this->transform, transformUpdated, drawOrderChanged, renderOrderChanged);
+
+					if (d->visible) {
+						int flags = GS_BLSRC_ONE | GS_BLSRC_ONEMINUSSRCALPHA;
+
+						if (d->constFlags & csmBlendAdditive) {
+							flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
+						} else if (d->constFlags & csmBlendMultiplicative) {
+							flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+						}
+
+						renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
+						renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
+						renderer->DrawDynVB(d->verts, (uint16 *)d->indices, d->vertCount, d->indicesCount, prtTriangleList);
+					}
+				}
+				break;
+			case rtRender:
+				for (int i = 0; i < this->drawCount; i++) {
+					Drawable * d = this->drawables[this->renderOrder[i]];
+					d->update(this->model, this->transform, transformUpdated, drawOrderChanged, renderOrderChanged);
+
+					if (d->visible) {
+						int flags = GS_BLSRC_ONE | GS_BLSRC_ONEMINUSSRCALPHA;
+
+						if (d->constFlags & csmBlendAdditive) {
+							flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
+						} else if (d->constFlags & csmBlendMultiplicative) {
+							flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+						}
+
+						renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
+						renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
+						renderer->DrawDynVB(d->verts, (uint16 *)d->indices, d->vertCount, d->indicesCount, prtTriangleList);
+					}
+				}
+				break;
 			}
+
+			if (drawOrderChanged) this->drawOrder = csmGetDrawableDrawOrders(this->model);
+			if (renderOrderChanged) this->renderOrder = csmGetDrawableRenderOrders(this->model);
 		} else {
 			//draw a blank space
 		}
@@ -233,6 +297,7 @@ namespace Cubism3 {
 			p->val = &csmGetParameterValues(this->model)[i];
 
 			this->parameters.push_back(p);
+			this->parametersMap[p->name] = p->id;
 		}
 		this->parameters.shrink_to_fit(); //free up unused memory
 
@@ -241,8 +306,6 @@ namespace Cubism3 {
 		const csmFlags* constFlags = csmGetDrawableConstantFlags(this->model);
 		const csmFlags* dynFlags = csmGetDrawableDynamicFlags(this->model);
 		const int* texIndices = csmGetDrawableTextureIndices(this->model);
-		const int* drawOrder = csmGetDrawableDrawOrders(this->model);
-		const int* renderOrder = csmGetDrawableRenderOrders(this->model);
 		const float* opacities = csmGetDrawableOpacities(this->model);
 		const int* maskCounts = csmGetDrawableMaskCounts(this->model);
 		const int** masks = csmGetDrawableMasks(this->model);
@@ -252,32 +315,36 @@ namespace Cubism3 {
 		const int* numIndexes = csmGetDrawableIndexCounts(this->model);
 		const unsigned short** indices = csmGetDrawableIndices(this->model);
 
-		for (int i = 0; i < csmGetDrawableCount(this->model); i++) {
+		this->drawCount = csmGetDrawableCount(this->model);
+		this->drawOrder = csmGetDrawableDrawOrders(this->model);
+		this->renderOrder = csmGetDrawableRenderOrders(this->model);
+
+		for (int i = 0; i < this->drawCount; i++) {
 			Drawable * d = new Drawable;
 			d->name = drawableNames[i];
 			d->id = i;
 			d->constFlags = constFlags[i];
 			d->dynFlags = dynFlags[i];
 			d->texIndices = texIndices[i];
-			d->drawOrder = drawOrder[i];
-			d->renderOrder = renderOrder[i];
+			d->drawOrder = this->drawOrder[i];
+			d->renderOrder = this->renderOrder[i];
 			d->opacity = opacities[i];
 			d->packedOpacity = ColorF(1, 1, 1, d->opacity).pack_argb8888();
 			d->maskCount = maskCounts[i];
 			d->maskIndices = masks[i];
 
 			d->vertCount = vertCount[i];
-			d->data = new SVF_P3F_C4B_T2F[d->vertCount];
-			d->rawdata = verts[i];
+			d->verts = new SVF_P3F_C4B_T2F[d->vertCount];
+			d->rawVerts = verts[i];
 			d->rawUVs = uvs[i];
 
 			for (int v = 0; v < d->vertCount; v++) {
-				d->data[v].xyz = Vec3(0.0f, 0.0f, 0.0f);
-				d->data[v].st = Vec2(0.0f, 0.0f);
-				d->data[v].color.dcolor = d->packedOpacity;
+				d->verts[v].xyz = Vec3(0.0f, 0.0f, 0.0f);
+				d->verts[v].st = Vec2(0.0f, 0.0f);
+				d->verts[v].color.dcolor = d->packedOpacity;
 			}
 
-			d->numIndices = numIndexes[i];
+			d->indicesCount = numIndexes[i];
 			d->indices = indices[i];
 
 			d->visible = d->dynFlags & csmIsVisible;
@@ -286,11 +353,14 @@ namespace Cubism3 {
 	}
 	void Cubism3UIComponent::FreeMoc() {
 		if (this->drawables.size() != 0) {
-			for (Drawable * d : this->drawables) delete d->data; //delete the vector data
+			for (Drawable * d : this->drawables) delete d->verts; //delete the vector data
 			this->drawables.clear(); //clear the drawables vector
 		}
 
-		if (this->parameters.size() != 0) this->parameters.clear(); //clear the parameters vector
+		if (this->parameters.size() != 0) {
+			this->parameters.clear(); //clear the parameters vector
+			this->parametersMap.clear(); //clear the parameters vector
+		}
 
 		if (this->model) CryModuleMemalignFree(this->model); //free the model
 		if (this->moc) CryModuleMemalignFree(this->moc); //free the moc
@@ -375,7 +445,7 @@ namespace Cubism3 {
 		if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
 	}
 
-	void Cubism3UIComponent::Drawable::update(csmModel* model, AZ::Matrix4x4 transform, bool transformUpdate) {
+	void Cubism3UIComponent::Drawable::update(csmModel* model, AZ::Matrix4x4 transform, bool transformUpdate, bool &drawOrderChanged, bool &renderOrderChanged) {
 		this->dynFlags = csmGetDrawableDynamicFlags(model)[this->id];
 
 		if (this->dynFlags & csmVisibilityDidChange) this->visible = this->dynFlags & csmIsVisible;
@@ -383,26 +453,32 @@ namespace Cubism3 {
 		if (this->dynFlags & csmOpacityDidChange) {
 			this->opacity = csmGetDrawableOpacities(model)[this->id];
 			this->packedOpacity = ColorF(1, 1, 1, this->opacity).pack_argb8888();
-			for (int i = 0; i < this->vertCount; i++) this->data[i].color.dcolor = this->packedOpacity;
+			for (int i = 0; i < this->vertCount; i++) this->verts[i].color.dcolor = this->packedOpacity;
 		}
 
-		if (this->dynFlags & csmDrawOrderDidChange) this->drawOrder = csmGetDrawableDrawOrders(model)[this->id];
-		if (this->dynFlags & csmRenderOrderDidChange) this->renderOrder = csmGetDrawableRenderOrders(model)[this->id];
+		if (this->dynFlags & csmDrawOrderDidChange) {
+			this->drawOrder = csmGetDrawableDrawOrders(model)[this->id];
+			drawOrderChanged = true;
+		}
+		if (this->dynFlags & csmRenderOrderDidChange) {
+			this->renderOrder = csmGetDrawableRenderOrders(model)[this->id];
+			renderOrderChanged = true;
+		}
 
 		if (this->dynFlags & csmVertexPositionsDidChange) {
 			const int vertCount = csmGetDrawableVertexCounts(model)[this->id];
 
 			//recreate buffer if needed
 			if (vertCount != this->vertCount) {
-				delete this->data;
+				delete this->verts;
 				this->vertCount = vertCount;
-				this->data = new SVF_P3F_C4B_T2F[this->vertCount];
+				this->verts = new SVF_P3F_C4B_T2F[this->vertCount];
 			}
 
-			this->rawdata = csmGetDrawableVertexPositions(model)[this->id];
+			this->rawVerts = csmGetDrawableVertexPositions(model)[this->id];
 			this->rawUVs = csmGetDrawableVertexUvs(model)[this->id];
 
-			this->numIndices = csmGetDrawableIndexCounts(model)[this->id];
+			this->indicesCount = csmGetDrawableIndexCounts(model)[this->id];
 			this->indices = csmGetDrawableIndices(model)[this->id];
 
 			transformUpdate = true; //make sure that we convert the data to lumberyard compatable data
@@ -411,12 +487,12 @@ namespace Cubism3 {
 		//update data only when transform has changed.
 		if (transformUpdate) {
 			for (int i = 0; i < this->vertCount; i++) {
-				AZ::Vector3 vec(rawdata[i].X, rawdata[i].Y, 1.0f);
+				AZ::Vector3 vec(rawVerts[i].X, rawVerts[i].Y, 1.0f);
 				vec = transform * vec;
 
-				this->data[i].xyz = Vec3(vec.GetX(), vec.GetY(), vec.GetZ());
-				this->data[i].st = Vec2(this->rawUVs[i].X, this->rawUVs[i].Y);
-				this->data[i].color.dcolor = this->packedOpacity;
+				this->verts[i].xyz = Vec3(vec.GetX(), vec.GetY(), vec.GetZ());
+				this->verts[i].st = Vec2(this->rawUVs[i].X, this->rawUVs[i].Y);
+				this->verts[i].color.dcolor = this->packedOpacity;
 			}
 		}
 	}
@@ -448,7 +524,11 @@ namespace Cubism3 {
 	}
 	
 	int Cubism3UIComponent::GetParameterIdByName(AZStd::string name) {
-		int ret = -1;
+		auto it = this->parametersMap.find(name); //should be faster to find an id by name rather than searching for it sequentially
+		if (it != this->parametersMap.end()) return it->second;
+		return -1;
+
+		/*int ret = -1;
 
 		for (int i = 0; i < this->parameters.size(); i++) {
 			if (this->parameters.at(i)->name == name) {
@@ -457,7 +537,7 @@ namespace Cubism3 {
 			}
 		}
 
-		return ret;
+		return ret;*/
 	}
 	
 	AZStd::string Cubism3UIComponent::GetParameterName(int index) {
@@ -465,24 +545,35 @@ namespace Cubism3 {
 		return this->parameters.at(index)->name;
 	}
 	
-	float Cubism3UIComponent::GetParameterMax(int index) {
+	//parameters by index
+	float Cubism3UIComponent::GetParameterMaxI(int index) {
 		if (index < 0 || index >= this->parameters.size()) return -1;
 		return this->parameters.at(index)->max;
 	}
 	
-	float Cubism3UIComponent::GetParameterMin(int index) {
+	float Cubism3UIComponent::GetParameterMinI(int index) {
 		if (index < 0 || index >= this->parameters.size()) return -1;
 		return this->parameters.at(index)->min;
 	}
 	
-	float Cubism3UIComponent::GetParameterValue(int index) {
+	float Cubism3UIComponent::GetParameterValueI(int index) {
 		if (index < 0 || index >= this->parameters.size()) return -1;
 		return *(this->parameters.at(index)->val);
 	}
 	
-	void Cubism3UIComponent::SetParameterValue(int index, float value) {
+	void Cubism3UIComponent::SetParameterValueI(int index, float value) {
 		if (index < 0 || index >= this->parameters.size()) return;
 		*(this->parameters.at(index)->val) = value;
 	}
+
+	//parameters by name
+	float Cubism3UIComponent::GetParameterMaxS(AZStd::string name) { return GetParameterMaxI(GetParameterIdByName(name)); }
+	float Cubism3UIComponent::GetParameterMinS(AZStd::string name) { return GetParameterMinI(GetParameterIdByName(name)); }
+	float Cubism3UIComponent::GetParameterValueS(AZStd::string name) { return GetParameterValueI(GetParameterIdByName(name)); }
+	void Cubism3UIComponent::SetParameterValueS(AZStd::string name, float value) { return SetParameterValueI(GetParameterIdByName(name), value); }
+
+	//rendertype
+	void Cubism3UIComponent::SetRenderType(Cubism3UIInterface::RenderType rt) { this->rType = rt; }
+	Cubism3UIInterface::RenderType Cubism3UIComponent::GetRenderType() { return this->rType; }
 	// ~Cubism3UIBus
 }
