@@ -6,7 +6,7 @@
 namespace Cubism3 {
 
 	#ifndef CUBISM3_MULTITHREAD_LIMITER
-		#define CUBISM3_MULTITHREAD_LIMITER 10
+		#define CUBISM3_MULTITHREAD_LIMITER 4
 	#endif
 
 	class Cubism3UIInterface

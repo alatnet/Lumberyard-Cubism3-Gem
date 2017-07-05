@@ -821,7 +821,6 @@ namespace Cubism3 {
 			m_threads[i]->Start();
 		}
 	}
-
 	Cubism3UIComponent::DrawableMultiThread::~DrawableMultiThread() {
 		for (int i = 0; i < numThreads; i++) {
 			this->m_threads[i]->Cancel();
@@ -839,6 +838,7 @@ namespace Cubism3 {
 		while (!this->m_canceled) {
 			this->Wait();
 			this->mutex.Lock();
+			if (this->m_canceled) break;
 
 			this->rwmutex.WLock();
 			this->m_drawOrderChanged = this->m_renderOrderChanged = false;
@@ -864,7 +864,6 @@ namespace Cubism3 {
 		this->rwmutex.RUnlock();
 		return ret;
 	}
-
 	bool Cubism3UIComponent::DrawableMultiThread::RenderOrderChanged() {
 		bool ret = false;
 		this->rwmutex.RLock();
@@ -889,12 +888,12 @@ namespace Cubism3 {
 		this->m_canceled = true;
 		this->Notify();
 	}
-
 	void Cubism3UIComponent::DrawableMultiThread::SubThread::Run(){
 		Drawable * d = nullptr;
 		while (!this->m_canceled) {
 			this->Wait();
 			this->mutex.Lock();
+			if (this->m_canceled) break;
 
 			d = nullptr;
 
@@ -903,6 +902,7 @@ namespace Cubism3 {
 			d = this->m_dmt->GetNextDrawable();
 			this->m_dmt->dMutex.Unlock();
 			while(d){
+				if (this->m_canceled) break;
 				bool drawOrderChanged = false, renderOrderChanged = false;
 
 				//update the drawable
@@ -919,6 +919,7 @@ namespace Cubism3 {
 				this->m_dmt->dMutex.Unlock();
 			}
 
+			if (this->m_canceled) break;
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
