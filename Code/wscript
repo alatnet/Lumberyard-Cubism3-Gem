@@ -7,6 +7,17 @@ def build(bld):
 
         debug_win_linkflags = [ '/VERBOSE' ],
 
+		#defines
+		defines = [
+			# Sets threading override
+			# 0 - no threading
+			# 1 - single threading
+			# 2 - multithreading
+			#'CUBISM3_THREADING=0'
+			# Limits the number of sub threads in multi-threaded mode that run at the same time
+			#'CUBISM3_MULTITHREAD_LIMITER=10'
+		],
+
         #library
         lib = [ 'Live2DCubismCore' ],
         
