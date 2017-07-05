@@ -701,6 +701,8 @@ namespace Cubism3 {
 	}
 
 	///multithread
+	//each drawable gets a thread.
+	/*
 	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform, unsigned int limiter = CUBISM3_MULTITHREAD_LIMITER) : DrawableThreadBase(drawables, transform) {
 		for (Drawable * d : drawables) {
 			SubThread * t = new SubThread(d, this);
@@ -729,11 +731,14 @@ namespace Cubism3 {
 			this->mutex.Lock();
 			if (this->m_canceled) break;
 
+			this->rwmutex.WLock();
 			this->m_drawOrderChanged = this->m_renderOrderChanged = false;
+			this->rwmutex.WUnlock();
+
 			csmUpdateModel(this->m_model);
 
 			for (SubThread * t : this->m_threads) t->Notify();
-			for (SubThread * t : this->m_threads) t->WaitTillDone(); //make sure every thread is done before unblocking.
+			for (SubThread * t : this->m_threads) t->WaitTillReady(); //make sure every thread is done before unblocking.
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
@@ -785,5 +790,125 @@ namespace Cubism3 {
 		this->mutex.Lock();
 		this->mutex.Unlock();
 	}
+	*/
 
+	///multithread alt
+	//limited number of threads, each thread updates a drawable.
+	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform, unsigned int limiter) : DrawableThreadBase(drawables, transform) {
+		this->drawables = &drawables;
+		m_threads = new SubThread*[limiter];
+		this->numThreads = limiter;
+
+		for (int i = 0; i < limiter; i++) {
+			m_threads[i] = new SubThread(this);
+			m_threads[i]->Start();
+		}
+	}
+
+	Cubism3UIComponent::DrawableMultiThread::~DrawableMultiThread() {
+		for (int i = 0; i < numThreads; i++) {
+			this->m_threads[i]->Cancel();
+			this->m_threads[i]->WaitTillReady();
+			this->m_threads[i]->WaitForThread();
+			delete this->m_threads[i];
+		}
+		delete this->m_threads;
+
+		this->Cancel();
+		this->WaitTillReady();
+	}
+
+	void Cubism3UIComponent::DrawableMultiThread::Run() {
+		while (!this->m_canceled) {
+			this->Wait();
+			this->mutex.Lock();
+
+			this->rwmutex.WLock();
+			this->m_drawOrderChanged = this->m_renderOrderChanged = false;
+			this->rwmutex.WUnlock();
+
+			this->dMutex.Lock();
+			this->nextDrawable = 0;
+			this->dMutex.Unlock();
+
+			csmUpdateModel(this->m_model);
+
+			for (int i = 0; i < numThreads; i++) this->m_threads[i]->Notify(); //wake up worker threads
+			for (int i = 0; i < numThreads; i++) this->m_threads[i]->WaitTillReady(); //wait until the worker threads are done
+			this->mutex.Unlock();
+		}
+		this->mutex.Unlock();
+	}
+
+	bool Cubism3UIComponent::DrawableMultiThread::DrawOrderChanged() {
+		bool ret = false;
+		this->rwmutex.RLock();
+		ret = this->m_drawOrderChanged;
+		this->rwmutex.RUnlock();
+		return ret;
+	}
+
+	bool Cubism3UIComponent::DrawableMultiThread::RenderOrderChanged() {
+		bool ret = false;
+		this->rwmutex.RLock();
+		ret = this->m_renderOrderChanged;
+		this->rwmutex.RUnlock();
+		return ret;
+	}
+
+	Cubism3UIComponent::Drawable * Cubism3UIComponent::DrawableMultiThread::GetNextDrawable() {
+		if (!this->m_canceled) {
+			if (this->nextDrawable >= this->drawables->size()) return nullptr;
+			Drawable * ret = this->drawables->at(this->nextDrawable);
+			this->nextDrawable++;
+			return ret;
+		}
+		return nullptr;
+	}
+
+	///multithread alt - sub thread
+	void Cubism3UIComponent::DrawableMultiThread::SubThread::Cancel() {
+		this->WaitTillDone();
+		this->m_canceled = true;
+		this->Notify();
+	}
+
+	void Cubism3UIComponent::DrawableMultiThread::SubThread::Run(){
+		Drawable * d = nullptr;
+		while (!this->m_canceled) {
+			this->Wait();
+			this->mutex.Lock();
+
+			d = nullptr;
+
+			//get first drawable to update
+			this->m_dmt->dMutex.Lock();
+			d = this->m_dmt->GetNextDrawable();
+			this->m_dmt->dMutex.Unlock();
+			while(d){
+				bool drawOrderChanged = false, renderOrderChanged = false;
+
+				//update the drawable
+				d->update(m_dmt->GetModel(), *m_dmt->GetTransform(), m_dmt->GetTransformUpdate(), drawOrderChanged, renderOrderChanged);
+
+				m_dmt->rwmutex.WLock();
+				if (drawOrderChanged) this->m_dmt->SetDrawOrderChanged(true);
+				if (renderOrderChanged) this->m_dmt->SetRenderOrderChanged(true);
+				m_dmt->rwmutex.WUnlock();
+
+				//get next drawable to update
+				this->m_dmt->dMutex.Lock();
+				d = this->m_dmt->GetNextDrawable();
+				this->m_dmt->dMutex.Unlock();
+			}
+
+			this->mutex.Unlock();
+		}
+		this->mutex.Unlock();
+	}
+
+	void Cubism3UIComponent::DrawableMultiThread::SubThread::WaitTillReady() {
+		this->mutex.Lock();
+		this->mutex.Unlock();
+	}
 }

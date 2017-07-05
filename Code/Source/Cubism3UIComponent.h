@@ -286,6 +286,7 @@ namespace Cubism3 {
 			CryMutex mutex;
 		};
 
+		//one thread to rule them all.
 		class DrawableSingleThread : public DrawableThreadBase {
 		public:
 			DrawableSingleThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform) : DrawableThreadBase(drawables, transform) {}
@@ -293,7 +294,8 @@ namespace Cubism3 {
 			void Run();
 		};
 
-		class DrawableMultiThread : public DrawableThreadBase {
+		//each drawable gets a thread.
+		/*class DrawableMultiThread : public DrawableThreadBase {
 		public:
 			DrawableMultiThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform, unsigned int limiter);
 			~DrawableMultiThread();
@@ -302,7 +304,6 @@ namespace Cubism3 {
 		public:
 			bool DrawOrderChanged();
 			bool RenderOrderChanged();
-		public:
 		private:
 			class SubThread : public CryThread<CryRunnable> {
 			public:
@@ -311,7 +312,7 @@ namespace Cubism3 {
 				void Cancel();
 				void Run();
 			public:
-				void WaitTillDone();
+				void WaitTillReady();
 			private:
 				Drawable * m_d;
 				DrawableMultiThread *m_dmt;
@@ -322,6 +323,42 @@ namespace Cubism3 {
 			AZStd::vector<SubThread *> m_threads;
 			CryRWLock rwmutex;
 			CrySemaphore * semaphore;
+		};*/
+
+		//producer-consumer multi-thread
+		//limited number of threads, each thread updates a drawable.
+		class DrawableMultiThread : public DrawableThreadBase {
+		public:
+			DrawableMultiThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform, unsigned int limiter);
+			~DrawableMultiThread();
+		public:
+			void Run();
+		public:
+			bool DrawOrderChanged();
+			bool RenderOrderChanged();
+		protected:
+			Drawable * GetNextDrawable();
+		private:
+			class SubThread : public CryThread<CryRunnable> {
+			public:
+				SubThread(DrawableMultiThread * dmt) : m_dmt(dmt) {}
+			public:
+				void Cancel();
+				void Run();
+			public:
+				void WaitTillReady();
+			private:
+				CryMutex mutex;
+				DrawableMultiThread *m_dmt;
+				bool m_canceled;
+			};
+		private:
+			SubThread ** m_threads;
+			unsigned int numThreads;
+			CryRWLock rwmutex;
+			CryMutex dMutex;
+			AZStd::vector<Drawable*> *drawables;
+			unsigned int nextDrawable;
 		};
 
 		DrawableThreadBase *tJob;
