@@ -40,6 +40,8 @@ namespace Cubism3 {
 
 		this->m_threading = NONE;
 		this->tJob = nullptr;
+
+		this->threadLimiter = CUBISM3_MULTITHREAD_LIMITER;
 	}
 
 	Cubism3UIComponent::~Cubism3UIComponent() {
