@@ -729,12 +729,11 @@ namespace Cubism3 {
 			this->mutex.Lock();
 			if (this->m_canceled) break;
 
-			for (SubThread * t : this->m_threads) t->WaitTillDone(); //make sure every thread is ready.
-
 			this->m_drawOrderChanged = this->m_renderOrderChanged = false;
 			csmUpdateModel(this->m_model);
 
 			for (SubThread * t : this->m_threads) t->Notify();
+			for (SubThread * t : this->m_threads) t->WaitTillDone(); //make sure every thread is done before unblocking.
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
