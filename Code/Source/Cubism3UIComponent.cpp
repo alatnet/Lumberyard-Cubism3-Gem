@@ -88,6 +88,15 @@ namespace Cubism3 {
 			AZ::BehaviorContext* behaviorContext = azrtti_cast<AZ::BehaviorContext*>(context);
 			if (behaviorContext) {
 				#define EBUS_METHOD(name) ->Event(#name, &Cubism3UIBus::Events::##name##)
+				behaviorContext->Class<Cubism3UIComponent>("Cubisim3UI")
+					->Enum<Cubism3UIInterface::RenderType::rtSequential>("rtSequential")
+					->Enum<Cubism3UIInterface::RenderType::rtDraw>("rtDraw")
+					->Enum<Cubism3UIInterface::RenderType::rtRender>("rtRender")
+					->Enum<Cubism3UIInterface::Threading::NONE>("tNone")
+					->Enum<Cubism3UIInterface::Threading::SINGLE>("tSingle")
+					->Enum<Cubism3UIInterface::Threading::MULTI>("tMulti")
+					;
+
 				behaviorContext->EBus<Cubism3UIBus>("Cubism3UIBus")
 					//pathnames
 					EBUS_METHOD(SetMocPathname)
@@ -108,6 +117,14 @@ namespace Cubism3 {
 					EBUS_METHOD(GetParameterMinS)
 					EBUS_METHOD(GetParameterValueS)
 					EBUS_METHOD(SetParameterValueS)
+					//render types
+					EBUS_METHOD(SetRenderType)
+					EBUS_METHOD(GetRenderType)
+					//Threading
+					EBUS_METHOD(SetThreading)
+					EBUS_METHOD(GetThreading)
+					EBUS_METHOD(SetMultiThreadLimiter)
+					EBUS_METHOD(GetMultiThreadLimiter)
 					;
 				#undef EBUS_METHOD
 				/*	
@@ -868,7 +885,7 @@ namespace Cubism3 {
 
 	///multithread alt - sub thread
 	void Cubism3UIComponent::DrawableMultiThread::SubThread::Cancel() {
-		this->WaitTillDone();
+		this->WaitTillReady();
 		this->m_canceled = true;
 		this->Notify();
 	}
