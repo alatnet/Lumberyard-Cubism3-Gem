@@ -702,7 +702,11 @@ namespace Cubism3 {
 
 	///multithread
 	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform, unsigned int limiter = CUBISM3_MULTITHREAD_LIMITER) : DrawableThreadBase(drawables, transform) {
-		for (Drawable * d : drawables) this->m_threads.push_back(new SubThread(d, this));
+		for (Drawable * d : drawables) {
+			SubThread * t = new SubThread(d, this);
+			t->Start();
+			this->m_threads.push_back(t);
+		}
 		this->m_threads.shrink_to_fit();
 
 		this->semaphore = new CrySemaphore(limiter); //limiter for subthread execution
@@ -710,6 +714,7 @@ namespace Cubism3 {
 	Cubism3UIComponent::DrawableMultiThread::~DrawableMultiThread() {
 		for (SubThread* t : this->m_threads) {
 			t->Cancel();
+			t->WaitTillDone();
 			t->WaitForThread();
 		}
 		this->m_threads.clear();
