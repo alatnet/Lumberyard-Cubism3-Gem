@@ -678,6 +678,7 @@ namespace Cubism3 {
 	Cubism3UIInterface::Threading Cubism3UIComponent::GetThreading() { return this->m_threading; }
 	void Cubism3UIComponent::SetMultiThreadLimiter(unsigned int limiter) {
 		if (limiter == 0) limiter = 1;
+		this->threadLimiter = limiter;
 		this->SetThreading(this->m_threading); //recreate the update thread.
 	}
 	// ~Cubism3UIBus
