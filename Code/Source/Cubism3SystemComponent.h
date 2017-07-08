@@ -6,6 +6,8 @@
 #include <Cubism3/Cubism3Bus.h>
 #include <LyShine/Bus/UiSystemBus.h>
 
+#include "Cubism3Assets.h"
+
 namespace Cubism3
 {
     class Cubism3SystemComponent

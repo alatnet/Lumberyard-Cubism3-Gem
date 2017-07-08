@@ -50,13 +50,13 @@ namespace Cubism3 {
 	public:
 		static const AZ::EBusHandlerPolicy HandlerPolicy = AZ::EBusHandlerPolicy::Single;
 	public: //render types
-		enum RenderType {
+		/*enum RenderType {
 			rtSequential, //sequential order
 			rtDraw, //draw order
 			rtRender //render order
 		};
 		virtual void SetRenderType(RenderType rt) = 0;
-		virtual RenderType GetRenderType() = 0;
+		virtual RenderType GetRenderType() = 0;*/
 
 	//#ifdef CUBISM3_ENABLE_THREADING
 	public: //threading

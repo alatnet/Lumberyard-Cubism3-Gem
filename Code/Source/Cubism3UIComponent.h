@@ -9,6 +9,7 @@
 
 #include <AzCore/Math/Matrix4x4.h>
 #include <AzCore/Math/Vector3.h>
+#include <AzCore/Math/Vector2.h>
 
 #include "../../Engine/LmbrCentral/include/LmbrCentral/Rendering/MaterialAsset.h"
 
@@ -22,9 +23,9 @@
 #include <ITexture.h>
 #include <VertexFormats.h>
 
-#include <AZCore/RTTI/TypeInfo.h>
-
 #include <CryThread.h>
+
+#include "Cubism3Assets.h"
 
 namespace Cubism3 {
 	class Cubism3UIComponent
@@ -92,8 +93,8 @@ namespace Cubism3 {
 		void SetParameterValueS(AZStd::string name, float value);
 
 		//rendertype
-		void SetRenderType(Cubism3UIInterface::RenderType rt);
-		Cubism3UIInterface::RenderType GetRenderType();
+		/*void SetRenderType(Cubism3UIInterface::RenderType rt);
+		Cubism3UIInterface::RenderType GetRenderType();*/
 
 		//threading
 		void SetThreading(Cubism3UIInterface::Threading t);
@@ -102,31 +103,7 @@ namespace Cubism3 {
 		unsigned int GetMultiThreadLimiter() { return this->threadLimiter; }
 		// ~Cubism3UIBus
 
-	private:
-		class Cubism3Asset {
-		public:
-			AZ_TYPE_INFO(Cubism3Asset, "{A679F1C0-60A1-48FB-8107-A68195D76CF2}");
-			static const char* GetFileFilter() {
-				return "*.model3.json";
-			}
-		};
-
-		/*class MotionAsset {
-		public:
-			AZ_TYPE_INFO(MotionAsset, "{DC1BA430-5D5E-4A09-BA5F-1FB05180C6A1}");
-			static const char* GetFileFilter() {
-				return "*.motion3.json";
-			}
-		};*/
-
-		class MocAsset {
-		public:
-			AZ_TYPE_INFO(MocAsset, "{7DB33C8B-8498-404C-A301-B0269AE60388}");
-			static const char* GetFileFilter() {
-				return "*.moc3";
-			}
-		};
-
+	private: //asset stuff
 		AzFramework::SimpleAssetReference<MocAsset> m_mocPathname;
 		AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> m_imagePathname;
 
@@ -167,6 +144,8 @@ namespace Cubism3 {
 		ITexture * texture;
 
 		//AZStd::vector<ITexture*> textures;
+
+		bool modelLoaded;
 
 		//animation stuff
 		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
@@ -234,7 +213,7 @@ namespace Cubism3 {
 			const csmVector2* rawUVs;
 
 			int indicesCount; //csmGetDrawableIndexCounts
-			const unsigned short * indices; //csmGetDrawableIndices
+			uint16 * indices; //csmGetDrawableIndices
 
 			bool visible;
 
@@ -243,12 +222,14 @@ namespace Cubism3 {
 
 		AZStd::vector<Drawable*> drawables;
 
+		bool wireframe;
+
 	private: //rendering order stuff
 		int drawCount;
 		const int* drawOrder;
 		const int* renderOrder;
 
-		Cubism3UIInterface::RenderType rType;
+		//Cubism3UIInterface::RenderType rType;
 
 	private: //threading stuff
 		Cubism3UIInterface::Threading m_threading;

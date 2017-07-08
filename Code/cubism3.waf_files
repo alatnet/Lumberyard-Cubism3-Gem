@@ -16,7 +16,8 @@
       "Source/Cubism3SystemComponent.cpp",
       "Source/Cubism3SystemComponent.h",
       "Source/Cubism3UIComponent.cpp",
-      "Source/Cubism3UIComponent.h"
+      "Source/Cubism3UIComponent.h",
+       "Source/Cubism3Assets.h"
     ]
   }
 }  
