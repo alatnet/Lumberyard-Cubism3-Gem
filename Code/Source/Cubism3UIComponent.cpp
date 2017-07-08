@@ -31,6 +31,7 @@ namespace Cubism3 {
 	Cubism3UIComponent::Cubism3UIComponent() {
 		this->transform = AZ::Matrix4x4::CreateIdentity();
 		this->prevTransform = AZ::Matrix4x4::CreateZero();
+		this->uvTransform = AZ::Matrix4x4::CreateIdentity() * AZ::Matrix4x4::CreateScale(AZ::Vector3(1.0f, -1.0f, 1.0f)); //flip the texture on the y vector
 
 		this->moc = nullptr;
 		this->model = nullptr;
@@ -48,6 +49,8 @@ namespace Cubism3 {
 		this->threadLimiter = CUBISM3_MULTITHREAD_LIMITER;
 
 		this->wireframe = false;
+
+		this->modelSize = AZ::Vector2(1.0f, 1.0f);
 	}
 
 	Cubism3UIComponent::~Cubism3UIComponent() {
@@ -63,6 +66,7 @@ namespace Cubism3 {
 				->Field("MocFile", &Cubism3UIComponent::m_mocPathname)
 				->Field("ImageFile", &Cubism3UIComponent::m_imagePathname)
 				->Field("Wireframe", &Cubism3UIComponent::wireframe)
+				->Field("Threading", &Cubism3UIComponent::m_threading)
 				//->Field("RenderType", &Cubism3UIComponent::rType)
 			#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 				->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames)
@@ -84,68 +88,53 @@ namespace Cubism3 {
 				editInfo->DataElement(0, &Cubism3UIComponent::m_imagePathname, "Image path", "The Image path. Can be overridden by another component such as an interactable.")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnImageFileChange);
 
-				/*editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::rType, "Render Type", "How to render the Cubism3 Model.\nSequential - One drawable after the other.\nDraw - Draw based on draw order.\nRender - Draw based on render order.")
-					->EnumAttribute(Cubism3UIInterface::RenderType::rtSequential, "Sequential")
-					->EnumAttribute(Cubism3UIInterface::RenderType::rtDraw, "Draw")
-					->EnumAttribute(Cubism3UIInterface::RenderType::rtRender, "Render");*/
-
 				editInfo->DataElement(0, &Cubism3UIComponent::wireframe, "Wireframe (Debug)", "Wireframe Mode");
 
-			}
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::m_threading, "Threading (Debug)", "Threading Mode")
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnThreadingChange)
+					->EnumAttribute(Cubism3UIInterface::Threading::NONE, "None")
+					->EnumAttribute(Cubism3UIInterface::Threading::SINGLE, "Single")
+					->EnumAttribute(Cubism3UIInterface::Threading::MULTI, "Multi");
 
-			AZ::BehaviorContext* behaviorContext = azrtti_cast<AZ::BehaviorContext*>(context);
-			if (behaviorContext) {
-				#define EBUS_METHOD(name) ->Event(#name, &Cubism3UIBus::Events::##name##)
-				behaviorContext->Class<Cubism3UIComponent>("Cubisim3UI")
-					/*->Enum<Cubism3UIInterface::RenderType::rtSequential>("rtSequential")
-					->Enum<Cubism3UIInterface::RenderType::rtDraw>("rtDraw")
-					->Enum<Cubism3UIInterface::RenderType::rtRender>("rtRender")*/
-					->Enum<Cubism3UIInterface::Threading::NONE>("tNone")
-					->Enum<Cubism3UIInterface::Threading::SINGLE>("tSingle")
-					->Enum<Cubism3UIInterface::Threading::MULTI>("tMulti")
-					;
-
-				behaviorContext->EBus<Cubism3UIBus>("Cubism3UIBus")
-					//pathnames
-					EBUS_METHOD(SetMocPathname)
-					EBUS_METHOD(SetTexturePathname)
-					EBUS_METHOD(GetMocPathname)
-					EBUS_METHOD(GetTexturePathname)
-					//parameters
-					EBUS_METHOD(GetParameterCount)
-					EBUS_METHOD(GetParameterIdByName)
-					EBUS_METHOD(GetParameterName)
-					//parameters by index
-					EBUS_METHOD(GetParameterMaxI)
-					EBUS_METHOD(GetParameterMinI)
-					EBUS_METHOD(GetParameterValueI)
-					EBUS_METHOD(SetParameterValueI)
-					//parameters by name
-					EBUS_METHOD(GetParameterMaxS)
-					EBUS_METHOD(GetParameterMinS)
-					EBUS_METHOD(GetParameterValueS)
-					EBUS_METHOD(SetParameterValueS)
-					//render types
-					/*EBUS_METHOD(SetRenderType)
-					EBUS_METHOD(GetRenderType)*/
-					//Threading
-					EBUS_METHOD(SetThreading)
-					EBUS_METHOD(GetThreading)
-					EBUS_METHOD(SetMultiThreadLimiter)
-					EBUS_METHOD(GetMultiThreadLimiter)
-					;
-				#undef EBUS_METHOD
-				/*	
-				behaviorContext->Enum<(int)UiImageInterface::ImageType::Stretched>("eUiImageType_Stretched")
-					->Enum<(int)UiImageInterface::ImageType::Sliced>("eUiImageType_Sliced")
-					->Enum<(int)UiImageInterface::ImageType::Fixed>("eUiImageType_Fixed")
-					->Enum<(int)UiImageInterface::ImageType::Tiled>("eUiImageType_Tiled")
-					->Enum<(int)UiImageInterface::ImageType::StretchedToFit>("eUiImageType_StretchedToFit")
-					->Enum<(int)UiImageInterface::ImageType::StretchedToFill>("eUiImageType_StretchedToFill")
-					->Enum<(int)UiImageInterface::SpriteType::SpriteAsset>("eUiSpriteType_SpriteAsset")
-					->Enum<(int)UiImageInterface::SpriteType::RenderTarget>("eUiSpriteType_RenderTarget");
-					*/
 			}
+		}
+
+		AZ::BehaviorContext* behaviorContext = azrtti_cast<AZ::BehaviorContext*>(context);
+		if (behaviorContext) {
+			behaviorContext->Class<Cubism3UIComponent>("Cubisim3UI")
+				->Enum<Cubism3UIInterface::Threading::NONE>("tNone")
+				->Enum<Cubism3UIInterface::Threading::SINGLE>("tSingle")
+				->Enum<Cubism3UIInterface::Threading::MULTI>("tMulti")
+				;
+
+			#define EBUS_METHOD(name) ->Event(#name, &Cubism3UIBus::Events::##name##)
+			behaviorContext->EBus<Cubism3UIBus>("Cubism3UIBus")
+				//pathnames
+				EBUS_METHOD(SetMocPathname)
+				EBUS_METHOD(SetTexturePathname)
+				EBUS_METHOD(GetMocPathname)
+				EBUS_METHOD(GetTexturePathname)
+				//parameters
+				EBUS_METHOD(GetParameterCount)
+				EBUS_METHOD(GetParameterIdByName)
+				EBUS_METHOD(GetParameterName)
+				//parameters by index
+				EBUS_METHOD(GetParameterMaxI)
+				EBUS_METHOD(GetParameterMinI)
+				EBUS_METHOD(GetParameterValueI)
+				EBUS_METHOD(SetParameterValueI)
+				//parameters by name
+				EBUS_METHOD(GetParameterMaxS)
+				EBUS_METHOD(GetParameterMinS)
+				EBUS_METHOD(GetParameterValueS)
+				EBUS_METHOD(SetParameterValueS)
+				//Threading
+				EBUS_METHOD(SetThreading)
+				EBUS_METHOD(GetThreading)
+				EBUS_METHOD(SetMultiThreadLimiter)
+				EBUS_METHOD(GetMultiThreadLimiter)
+				;
+			#undef EBUS_METHOD
 		}
 	}
 
@@ -172,12 +161,8 @@ namespace Cubism3 {
 
 		if (this->modelLoaded) {
 			//threading
-			if (this->m_threading != NONE && this->tJob) { //if we are threading the drawable updates
-				this->tJob->WaitTillReady(); //wait until the update thread is ready.
-				//update rendering orders if needed
-				if (this->tJob->DrawOrderChanged()) this->drawOrder = csmGetDrawableDrawOrders(this->model);
-				if (this->tJob->RenderOrderChanged()) this->renderOrder = csmGetDrawableRenderOrders(this->model);
-			}
+			//if we are threading the drawable updates
+			if (this->m_threading != NONE && this->tJob) this->tJob->WaitTillReady(); //wait until the update thread is ready.
 
 			#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 			if (this->animations.size() != 0) {
@@ -201,11 +186,33 @@ namespace Cubism3 {
 			if (this->m_threading == NONE && !this->tJob)
 				csmUpdateModel(this->model);
 
-			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformToViewport, this->transform);
-			/*EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformFromViewport, this->transform);
-			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformToCanvasSpace, this->transform);
-			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformFromCanvasSpace, this->transform);
-			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetLocalTransform, this->transform);*/
+			AZ::Matrix4x4 viewport;
+			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformToViewport, viewport);
+
+			UiTransformInterface::RectPoints points;
+			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetCanvasSpacePointsNoScaleRotate, points);
+
+			UiTransformInterface::Rect rect;
+			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetCanvasSpaceRectNoScaleRotate, rect);
+
+			AZ::Vector2 rectSize = rect.GetSize();
+
+			this->transform =
+				viewport * 
+				AZ::Matrix4x4::CreateTranslation( //translate the object
+					AZ::Vector3(
+						points.pt[UiTransformInterface::RectPoints::Corner_TopLeft].GetX() + (rectSize.GetX() / 2),
+						points.pt[UiTransformInterface::RectPoints::Corner_TopLeft].GetY() + (rectSize.GetY() / 2),
+						0.0f
+					)
+				) * 
+				AZ::Matrix4x4::CreateScale( //scale the object
+					AZ::Vector3(
+						rectSize.GetX() / this->modelSize.GetX(),
+						-(rectSize.GetY() / this->modelSize.GetY()),
+						1.0f
+					)
+				);
 
 			bool transformUpdated = false;
 			if (this->transform != this->prevTransform) {
@@ -213,88 +220,32 @@ namespace Cubism3 {
 				transformUpdated = true;
 			}
 
-			bool drawOrderChanged = false, renderOrderChanged = false;
+			bool renderOrderChanged = false;
+			for (Drawable * d : this->drawables) {
+				if (this->m_threading == NONE && !this->tJob)
+					d->update(this->model, transformUpdated, renderOrderChanged);
 
-			/*switch (this->rType) {
-			case rtSequential:*/
-				/*for (Drawable * d : this->drawables) {
-					if (this->m_threading == NONE && !this->tJob)
-						d->update(this->model, this->transform, transformUpdated, drawOrderChanged, renderOrderChanged);
+				if (d->visible) {
+					int flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
+					if (d->constFlags & csmBlendAdditive) flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
+					else if (d->constFlags & csmBlendMultiplicative) flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
 
-					if (d->visible) {
-						int flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
-
-						if (d->constFlags & csmBlendAdditive) {
-							flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
-						} else if (d->constFlags & csmBlendMultiplicative) {
-							flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
-						}
-
-						if (this->texture != nullptr) renderer->SetTexture(texture->GetTextureID());
-						else renderer->SetTexture(renderer->GetWhiteTextureId());
-						renderer->SetState(flags | IUiRenderer::Get()->GetBaseState() | GS_NODEPTHTEST);
-						renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
-						renderer->DrawDynVB(d->verts, d->indices, d->vertCount, d->indicesCount, prtTriangleList);
-					}
-				}*/
-				/*break;
-			case rtDraw:*/
-				/*for (int i = 0; i < this->drawCount; i++) {
-					Drawable * d = this->drawables[this->drawOrder[i]];
-					if (this->m_threading == NONE && !this->tJob)
-						d->update(this->model, this->transform, transformUpdated, drawOrderChanged, renderOrderChanged);
-
-					if (d->visible) {
-						int flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
-
-						if (d->constFlags & csmBlendAdditive) {
-							flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
-						} else if (d->constFlags & csmBlendMultiplicative) {
-							flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
-						}
-
-						if (this->texture != nullptr) renderer->SetTexture(texture->GetTextureID() | GS_NODEPTHTEST);
-						else renderer->SetTexture(renderer->GetWhiteTextureId());
-						renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
-						renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
-						renderer->DrawDynVB(d->verts, d->indices, d->vertCount, d->indicesCount, prtTriangleList);
-					}
-				}*/
-				/*break;
-			case rtRender:*/
-				for (int i = 0; i < this->drawCount; i++) {
-					Drawable * d = this->drawables[this->renderOrder[i]];
-					if (this->m_threading == NONE && !this->tJob)
-						d->update(this->model, this->transform, transformUpdated, drawOrderChanged, renderOrderChanged);
-
-					if (d->visible) {
-						int flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
-
-						if (d->constFlags & csmBlendAdditive) {
-							flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
-						} else if (d->constFlags & csmBlendMultiplicative) {
-							flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
-						}
-
-						if (this->wireframe) renderer->PushWireframeMode(R_WIREFRAME_MODE);
-						(d->constFlags & csmIsDoubleSided) ? renderer->SetCullMode(R_CULL_DISABLE) : renderer->SetCullMode(R_CULL_BACK);
-						renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
-						renderer->SetState(flags | IUiRenderer::Get()->GetBaseState() | GS_NODEPTHTEST);
-						renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
-						renderer->DrawDynVB(d->verts, d->indices, d->vertCount, d->indicesCount, prtTriangleList);
-						if (this->wireframe) renderer->PopWireframeMode();
-					}
+					if (this->wireframe) renderer->PushWireframeMode(R_WIREFRAME_MODE);
+					(d->constFlags & csmIsDoubleSided) ? renderer->SetCullMode(R_CULL_DISABLE) : renderer->SetCullMode(R_CULL_BACK);
+					renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
+					renderer->SetState(flags | IUiRenderer::Get()->GetBaseState() | GS_NODEPTHTEST);
+					renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
+					renderer->DrawDynVB(d->verts, d->indices, d->vertCount, d->indicesCount, prtTriangleList);
+					if (this->wireframe) renderer->PopWireframeMode();
 				}
-			/*	break;
-			}*/
+			}
 
 			//threading
 			if (this->m_threading != NONE && this->tJob) { //if update is threaded
 				this->tJob->SetTransformUpdate(transformUpdated); //notify that the transform has updated or not //TRANSFORM
 				this->tJob->Notify(); //wake up the update thread.
 			} else {
-				if (drawOrderChanged) this->drawOrder = csmGetDrawableDrawOrders(this->model);
-				if (renderOrderChanged) this->renderOrder = csmGetDrawableRenderOrders(this->model);
+				if (renderOrderChanged) std::sort(this->drawables.begin(), this->drawables.end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; });
 			}
 		} else {
 			//draw a blank space
@@ -395,6 +346,13 @@ namespace Cubism3 {
 
 		this->model = csmInitializeModelInPlace(this->moc, modelBuf, modelSize);
 
+		//get canvas info
+		csmVector2 canvasSize;
+		csmVector2 modelOrigin;
+		csmReadCanvasInfo(this->model, &canvasSize, &modelOrigin, &this->modelAspect);
+		this->modelCanvasSize = AZ::Vector2(canvasSize.X, canvasSize.Y);
+		this->modelOrigin = AZ::Vector2(modelOrigin.X, modelOrigin.Y);
+
 		//get the parameters of the model
 		const char** paramNames = csmGetParameterIds(this->model);
 
@@ -425,23 +383,40 @@ namespace Cubism3 {
 		const int* numIndexes = csmGetDrawableIndexCounts(this->model);
 		const unsigned short** indices = csmGetDrawableIndices(this->model);
 
-		this->drawCount = csmGetDrawableCount(this->model);
-		this->drawOrder = csmGetDrawableDrawOrders(this->model);
-		this->renderOrder = csmGetDrawableRenderOrders(this->model);
+		unsigned int drawCount = csmGetDrawableCount(this->model);
+		const int * drawOrder = csmGetDrawableDrawOrders(this->model);
+		const int * renderOrder = csmGetDrawableRenderOrders(this->model);
+
+		std::string drawString = "";
+		std::string renderString = "";
+
+		float minX = 0.0f, minY = 0.0f, maxX = 0.0f, maxY = 0.0f;
 		
-		for (int i = 0; i < this->drawCount; i++) {
+		for (int i = 0; i < drawCount; ++i) {
+			drawString += std::to_string(drawOrder[i]);
+			renderString += std::to_string(renderOrder[i]);
+			if (i != drawCount - 1) {
+				drawString += ", ";
+				renderString += ", ";
+			}
+
 			Drawable * d = new Drawable;
 			d->name = drawableNames[i];
 			d->id = i;
 			d->constFlags = constFlags[i];
 			d->dynFlags = dynFlags[i];
 			d->texIndices = texIndices[i];
-			d->drawOrder = this->drawOrder[i];
-			d->renderOrder = this->renderOrder[i];
+			d->drawOrder = drawOrder[i];
+			d->renderOrder = renderOrder[i];
 			d->opacity = opacities[i];
 			d->packedOpacity = ColorF(1.0f, 1.0f, 1.0f, d->opacity).pack_argb8888();
 			d->maskCount = maskCounts[i];
-			d->maskIndices = masks[i];
+
+			d->maskIndices = new uint16[d->maskCount];
+			for (int in = 0; in < d->maskCount; in++) d->maskIndices[in] = masks[i][in];
+
+			d->transform = &this->transform;
+			d->uvTransform = &this->uvTransform;
 
 			d->vertCount = vertCount[i];
 			d->verts = new SVF_P3F_C4B_T2F[d->vertCount];
@@ -452,20 +427,29 @@ namespace Cubism3 {
 				d->verts[v].xyz = Vec3(0.0f, 0.0f, 0.0f);
 				d->verts[v].st = Vec2(0.0f, 0.0f);
 				d->verts[v].color.dcolor = d->packedOpacity;
+
+				if (d->rawVerts[v].X < minX) minX = d->rawVerts[v].X;
+				if (d->rawVerts[v].Y < minY) minY = d->rawVerts[v].Y;
+
+				if (d->rawVerts[v].X > maxX) maxX = d->rawVerts[v].X;
+				if (d->rawVerts[v].Y > maxY) maxY = d->rawVerts[v].Y;
 			}
 			
 			d->indicesCount = numIndexes[i];
 			d->indices = new uint16[d->indicesCount];
 
-			for (int in = 0; in < d->indicesCount; in++) {
-				d->indices[in] = indices[i][in];
-			}
+			for (int in = 0; in < d->indicesCount; in++) d->indices[in] = indices[i][in];
 
 			d->visible = d->dynFlags & csmIsVisible;
 
 			this->drawables.push_back(d);
 		}
 		this->drawables.shrink_to_fit(); //free up unused memory
+
+		this->modelSize.SetX(abs(minX) + abs(maxX));
+		this->modelSize.SetY(abs(minY) + abs(maxY));
+
+		std::sort(this->drawables.begin(), this->drawables.end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; }); //sort the drawables by render order
 
 		this->threadMutex.Lock();
 		//threading
@@ -481,11 +465,11 @@ namespace Cubism3 {
 			this->tJob = nullptr;
 			break;
 		case SINGLE:
-			this->tJob = new DrawableSingleThread(this->drawables, this->transform);
+			this->tJob = new DrawableSingleThread(this->drawables);
 			this->tJob->SetModel(this->model);
 			break;
 		case MULTI:
-			this->tJob = new DrawableMultiThread(this->drawables, this->transform, this->threadLimiter);
+			this->tJob = new DrawableMultiThread(this->drawables, this->threadLimiter);
 			this->tJob->SetModel(this->model);
 			break;
 		}
@@ -510,6 +494,7 @@ namespace Cubism3 {
 			for (Drawable * d : this->drawables) {
 				delete d->verts; //delete the vector data
 				delete d->indices; //delete the indices data
+				delete d->maskIndices; //delete the mask indices
 			}
 			this->drawables.clear(); //clear the drawables vector
 		}
@@ -531,8 +516,6 @@ namespace Cubism3 {
 		//load the texture
 		this->texture = gEnv->pSystem->GetIRenderer()->EF_LoadTexture(this->m_imagePathname.GetAssetPath().c_str(), FT_DONT_STREAM);
 		this->texture->AddRef(); //Release
-
-		//this->m_modelLoaded = this->m_mocPathname.GetAssetPath().empty() && this->m_imagePathname.GetAssetPath().empty();
 	}
 	void Cubism3UIComponent::FreeTexture() {
 		SAFE_RELEASE(texture);
@@ -600,7 +583,7 @@ namespace Cubism3 {
 		if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
 	}
 
-	void Cubism3UIComponent::Drawable::update(csmModel* model, AZ::Matrix4x4 transform, bool transformUpdate, bool &drawOrderChanged, bool &renderOrderChanged) {
+	void Cubism3UIComponent::Drawable::update(csmModel* model, bool transformUpdate, bool &renderOrderChanged) {
 		this->dynFlags = csmGetDrawableDynamicFlags(model)[this->id];
 
 		if (this->dynFlags & csmVisibilityDidChange) this->visible = this->dynFlags & csmIsVisible;
@@ -611,10 +594,7 @@ namespace Cubism3 {
 			for (int i = 0; i < this->vertCount; i++) this->verts[i].color.dcolor = this->packedOpacity;
 		}
 
-		if (this->dynFlags & csmDrawOrderDidChange) {
-			this->drawOrder = csmGetDrawableDrawOrders(model)[this->id];
-			drawOrderChanged = true;
-		}
+		if (this->dynFlags & csmDrawOrderDidChange) this->drawOrder = csmGetDrawableDrawOrders(model)[this->id];
 		if (this->dynFlags & csmRenderOrderDidChange) {
 			this->renderOrder = csmGetDrawableRenderOrders(model)[this->id];
 			renderOrderChanged = true;
@@ -654,10 +634,12 @@ namespace Cubism3 {
 		if (transformUpdate) {
 			for (int i = 0; i < this->vertCount; i++) {
 				AZ::Vector3 vec(rawVerts[i].X, rawVerts[i].Y, 1.0f);
-				vec = transform * vec;
+				vec = *this->transform * vec;
+
+				AZ::Vector3 uvTrans = AZ::Vector3(this->rawUVs[i].X, this->rawUVs[i].Y, 0.0f) * *this->uvTransform;
 
 				this->verts[i].xyz = Vec3(vec.GetX(), vec.GetY(), vec.GetZ());
-				this->verts[i].st = Vec2(this->rawUVs[i].X, this->rawUVs[i].Y);
+				this->verts[i].st = Vec2(uvTrans.GetX(), uvTrans.GetY());
 				this->verts[i].color.dcolor = this->packedOpacity;
 			}
 		}
@@ -728,10 +710,6 @@ namespace Cubism3 {
 	float Cubism3UIComponent::GetParameterValueS(AZStd::string name) { return GetParameterValueI(GetParameterIdByName(name)); }
 	void Cubism3UIComponent::SetParameterValueS(AZStd::string name, float value) { return SetParameterValueI(GetParameterIdByName(name), value); }
 
-	//rendertype
-	/*void Cubism3UIComponent::SetRenderType(Cubism3UIInterface::RenderType rt) { this->rType = rt; }
-	Cubism3UIInterface::RenderType Cubism3UIComponent::GetRenderType() { return this->rType; }*/
-
 	//threading
 	void Cubism3UIComponent::SetThreading(Cubism3UIInterface::Threading t) {
 		if (Cubism3UIComponent::m_threadingOverride == DISABLED) {
@@ -752,11 +730,11 @@ namespace Cubism3 {
 		//create a new update thread.
 		switch (this->m_threading) {
 		case SINGLE:
-			this->tJob = new DrawableSingleThread(this->drawables, this->transform);
+			this->tJob = new DrawableSingleThread(this->drawables);
 			this->tJob->SetModel(this->model);
 			break;
 		case MULTI:
-			this->tJob = new DrawableMultiThread(this->drawables, this->transform, this->threadLimiter);
+			this->tJob = new DrawableMultiThread(this->drawables, this->threadLimiter);
 			this->tJob->SetModel(this->model);
 			break;
 		}
@@ -773,11 +751,13 @@ namespace Cubism3 {
 	// ~Cubism3UIBus
 
 	//Threading stuff
+	void Cubism3UIComponent::OnThreadingChange() {
+		this->SetThreading(this->m_threading);
+	}
+
 	///base thread
-	Cubism3UIComponent::DrawableThreadBase::DrawableThreadBase(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform) {
+	Cubism3UIComponent::DrawableThreadBase::DrawableThreadBase(AZStd::vector<Drawable*> &drawables) {
 		this->m_drawables = &drawables;
-		this->m_transform = &transform;
-		this->m_drawOrderChanged = false;
 		this->m_renderOrderChanged = false;
 		this->m_canceled = false;
 	}
@@ -799,9 +779,12 @@ namespace Cubism3 {
 			this->Wait();
 			this->mutex.Lock();
 			if (this->m_canceled) break;
-			this->m_drawOrderChanged = this->m_renderOrderChanged = false;
+			this->m_renderOrderChanged = false;
 			csmUpdateModel(this->m_model);
-			for (Drawable* d : *m_drawables) d->update(this->m_model, *this->m_transform, this->m_transformUpdate, this->m_drawOrderChanged, this->m_renderOrderChanged);
+
+			for (Drawable* d : *m_drawables) d->update(this->m_model, this->m_transformUpdate, this->m_renderOrderChanged);
+
+			if (this->m_renderOrderChanged) std::sort(this->m_drawables->begin(), this->m_drawables->end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; });
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
@@ -901,7 +884,7 @@ namespace Cubism3 {
 
 	///multithread alt
 	//limited number of threads, each thread updates a drawable.
-	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform, unsigned int limiter) : DrawableThreadBase(drawables, transform) {
+	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> &drawables, unsigned int limiter) : DrawableThreadBase(drawables) {
 		this->drawables = &drawables;
 		m_threads = new SubThread*[limiter];
 		this->numThreads = limiter;
@@ -931,7 +914,7 @@ namespace Cubism3 {
 			if (this->m_canceled) break;
 
 			this->rwmutex.WLock();
-			this->m_drawOrderChanged = this->m_renderOrderChanged = false;
+			this->m_renderOrderChanged = false;
 			this->rwmutex.WUnlock();
 
 			this->dMutex.Lock();
@@ -942,18 +925,14 @@ namespace Cubism3 {
 
 			for (int i = 0; i < numThreads; i++) this->m_threads[i]->Notify(); //wake up worker threads
 			for (int i = 0; i < numThreads; i++) this->m_threads[i]->WaitTillReady(); //wait until the worker threads are done
+
+			if (this->m_renderOrderChanged) std::sort(this->m_drawables->begin(), this->m_drawables->end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; });
+
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
 	}
 
-	bool Cubism3UIComponent::DrawableMultiThread::DrawOrderChanged() {
-		bool ret = false;
-		this->rwmutex.RLock();
-		ret = this->m_drawOrderChanged;
-		this->rwmutex.RUnlock();
-		return ret;
-	}
 	bool Cubism3UIComponent::DrawableMultiThread::RenderOrderChanged() {
 		bool ret = false;
 		this->rwmutex.RLock();
@@ -993,13 +972,12 @@ namespace Cubism3 {
 			this->m_dmt->dMutex.Unlock();
 			while(d){
 				if (this->m_canceled) break;
-				bool drawOrderChanged = false, renderOrderChanged = false;
+				bool renderOrderChanged = false;
 
 				//update the drawable
-				d->update(m_dmt->GetModel(), *m_dmt->GetTransform(), m_dmt->GetTransformUpdate(), drawOrderChanged, renderOrderChanged);
+				d->update(m_dmt->GetModel(), m_dmt->GetTransformUpdate(), renderOrderChanged);
 
 				m_dmt->rwmutex.WLock();
-				if (drawOrderChanged) this->m_dmt->SetDrawOrderChanged(true);
 				if (renderOrderChanged) this->m_dmt->SetRenderOrderChanged(true);
 				m_dmt->rwmutex.WUnlock();
 

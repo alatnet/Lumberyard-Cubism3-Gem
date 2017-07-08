@@ -7,6 +7,7 @@
 #include <AzCore/Component/Component.h>
 #include <AzCore/Serialization/SerializeContext.h>
 
+#include <AzCore/Math/Matrix3x3.h>
 #include <AzCore/Math/Matrix4x4.h>
 #include <AzCore/Math/Vector3.h>
 #include <AzCore/Math/Vector2.h>
@@ -92,10 +93,6 @@ namespace Cubism3 {
 		float GetParameterValueS(AZStd::string name);
 		void SetParameterValueS(AZStd::string name, float value);
 
-		//rendertype
-		/*void SetRenderType(Cubism3UIInterface::RenderType rt);
-		Cubism3UIInterface::RenderType GetRenderType();*/
-
 		//threading
 		void SetThreading(Cubism3UIInterface::Threading t);
 		Cubism3UIInterface::Threading GetThreading();
@@ -143,6 +140,8 @@ namespace Cubism3 {
 		//void * modelBuf;
 		ITexture * texture;
 
+		AZ::Vector2 modelSize;
+
 		//AZStd::vector<ITexture*> textures;
 
 		bool modelLoaded;
@@ -189,7 +188,7 @@ namespace Cubism3 {
 		AZStd::unordered_map<AZStd::string, int> parametersMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
 	private: //drawable stuff
-		AZ::Matrix4x4 prevTransform, transform;
+		AZ::Matrix4x4 prevTransform, transform, uvTransform;
 
 		typedef struct Drawable {
 			AZStd::string name; //csmGetDrawableIds
@@ -204,7 +203,9 @@ namespace Cubism3 {
 
 			//UiMaskBus usage
 			int maskCount; //csmGetDrawableMaskCounts
-			const int *maskIndices; //csmGetDrawableMasks
+			uint16 * maskIndices; //csmGetDrawableMasks
+
+			AZ::Matrix4x4 *transform, *uvTransform;
 
 			int vertCount;
 			SVF_P3F_C4B_T2F * verts; //csmGetDrawableVertexPositions, csmGetDrawableVertexUvs //update only when needed to?
@@ -217,50 +218,45 @@ namespace Cubism3 {
 
 			bool visible;
 
-			void update(csmModel* model, AZ::Matrix4x4 transform, bool transformUpdate, bool &drawOrderChanged, bool &renderOrderChanged);
+			void update(csmModel* model, bool transformUpdate, bool &renderOrderChanged);
 		} Drawable;
 
 		AZStd::vector<Drawable*> drawables;
 
 		bool wireframe;
 
-	private: //rendering order stuff
-		int drawCount;
-		const int* drawOrder;
-		const int* renderOrder;
-
-		//Cubism3UIInterface::RenderType rType;
+	private:
+		AZ::Vector2 modelCanvasSize;
+		AZ::Vector2 modelOrigin;
+		float modelAspect;
 
 	private: //threading stuff
 		Cubism3UIInterface::Threading m_threading;
 		static Cubism3UIInterface::Threading m_threadingOverride;
 
+		void OnThreadingChange();
+
 		class DrawableThreadBase : public CryThread<CryRunnable> {
 		public:
-			DrawableThreadBase(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform);
+			DrawableThreadBase(AZStd::vector<Drawable*> &drawables);
 			virtual ~DrawableThreadBase() {}
 		public:
 			void SetModel(csmModel * model) { this->m_model = model; }
 			csmModel * GetModel() { return this->m_model; }
 			void SetTransformUpdate(bool update) { this->m_transformUpdate = update; }
 			bool GetTransformUpdate() { return this->m_transformUpdate; }
-			AZ::Matrix4x4 * GetTransform() { return this->m_transform; }
 		public:
-			virtual bool DrawOrderChanged() { return this->m_drawOrderChanged; }
 			virtual bool RenderOrderChanged() { return this->m_renderOrderChanged; }
-
-			virtual void SetDrawOrderChanged(bool changed) { this->m_drawOrderChanged = changed; }
 			virtual void SetRenderOrderChanged(bool changed) { this->m_renderOrderChanged = changed; }
 		public:
 			virtual void Cancel();
 			virtual void Run() = 0;
 			virtual void WaitTillReady();
 		protected:
-			bool m_drawOrderChanged, m_renderOrderChanged;
+			bool m_renderOrderChanged;
 		protected:
 			AZStd::vector<Drawable*> *m_drawables;
 			csmModel * m_model;
-			AZ::Matrix4x4 *m_transform;
 			bool m_transformUpdate;
 		protected:
 			bool m_canceled;
@@ -270,7 +266,7 @@ namespace Cubism3 {
 		//one thread to rule them all.
 		class DrawableSingleThread : public DrawableThreadBase {
 		public:
-			DrawableSingleThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform) : DrawableThreadBase(drawables, transform) {}
+			DrawableSingleThread(AZStd::vector<Drawable*> &drawables) : DrawableThreadBase(drawables) {}
 		public:
 			void Run();
 		};
@@ -310,12 +306,11 @@ namespace Cubism3 {
 		//limited number of threads, each thread updates a drawable.
 		class DrawableMultiThread : public DrawableThreadBase {
 		public:
-			DrawableMultiThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform, unsigned int limiter);
+			DrawableMultiThread(AZStd::vector<Drawable*> &drawables, unsigned int limiter);
 			~DrawableMultiThread();
 		public:
 			void Run();
 		public:
-			bool DrawOrderChanged();
 			bool RenderOrderChanged();
 		protected:
 			Drawable * GetNextDrawable();

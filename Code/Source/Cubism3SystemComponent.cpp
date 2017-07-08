@@ -58,6 +58,10 @@ namespace Cubism3
 
     void Cubism3SystemComponent::Init()
     {
+		CryLog("[Cubism3] Cubism3 System Component initializing.");
+		CryLog("[Cubism3] Cubism3 Version: %i", csmGetVersion());
+		csmSetLogFunction([](const char* message) -> void { CryLog("[Cubism3] %s", message); });
+		CryLog("[Cubism3] Cubism3 System Component ready.");
     }
 
     void Cubism3SystemComponent::Activate()
