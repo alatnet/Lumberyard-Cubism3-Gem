@@ -84,11 +84,19 @@ namespace Cubism3 {
 
 	public:
 		// Cubism3UIBus
+		//load type
+		void SetLoadType(LoadType lt);
+		LoadType GetLoadType() { return this->lType; }
+
 		//pathnames
 		void SetMocPathname(AZStd::string path);
 		void SetTexturePathname(AZStd::string path);
 		AZStd::string GetMocPathname();
 		AZStd::string GetTexturePathname();
+
+		//json path
+		void SetJSONPathname(AZStd::string path);
+		AZStd::string GetJSONPathname();
 		
 		//parameters
 		int GetParameterCount();
@@ -123,6 +131,8 @@ namespace Cubism3 {
 		void FreeMoc();
 		void LoadTexture();
 		void FreeTexture();
+		void LoadJson();
+		void FreeJson();
 
 		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 		void LoadAnimation();
@@ -132,8 +142,10 @@ namespace Cubism3 {
 	private: //on change notifications
 		void OnMocFileChange();
 		void OnImageFileChange();
+		void OnJSONFileChange();
 		void OnThreadingChange();
 		void OnFillChange();
+		void OnLoadTypeChange();
 
 	private: //rendering updating
 		void PreRender();
@@ -141,21 +153,27 @@ namespace Cubism3 {
 		void EnableMasking();
 		void DisableMasking();
 
+	private: //misc funcs
+		bool IsLoadTypeSingle() { return this->lType == Single; }
+		bool IsLoadTypeJSON() { return this->lType == JSON; }
+
 	private:
 		csmMoc * moc;
 		csmModel * model;
-		ITexture * texture;
+		ITexture * texture; //used by single
+		AZStd::vector<ITexture*> textures; //used by json
 
 		AZ::Vector2 modelCanvasSize;
 		AZ::Vector2 modelOrigin;
 		float modelAspect;
+		unsigned int numTextures;
 
 		AZ::Vector2 modelSize;
 		bool fill;
 
-		AZStd::vector<ITexture*> textures;
-
 		bool modelLoaded;
+
+		LoadType lType;
 
 	private: //animation stuff
 		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
@@ -220,7 +238,7 @@ namespace Cubism3 {
 			int id;
 			csmFlags constFlags; //csmGetDrawableConstantFlags
 			csmFlags dynFlags; //csmGetDrawableDynamicFlags //constant update?
-			int texIndices; //csmGetDrawableTextureIndices //used when using model3.json
+			int texId; //csmGetDrawableTextureIndices //used when using model3.json
 			int drawOrder; //csmGetDrawableDrawOrders
 			int renderOrder; //csmGetDrawableRenderOrders
 			float opacity; //csmGetDrawableOpacities //color (alpha) //update as needed?
@@ -258,7 +276,7 @@ namespace Cubism3 {
 
 		class DrawableThreadBase : public CryThread<CryRunnable> {
 		public:
-			DrawableThreadBase(AZStd::vector<Drawable*> &drawables);
+			DrawableThreadBase(AZStd::vector<Drawable*> *drawables);
 			virtual ~DrawableThreadBase() {}
 		public:
 			void SetModel(csmModel * model) { this->m_model = model; }
@@ -286,7 +304,7 @@ namespace Cubism3 {
 		//one thread to rule them all.
 		class DrawableSingleThread : public DrawableThreadBase {
 		public:
-			DrawableSingleThread(AZStd::vector<Drawable*> &drawables) : DrawableThreadBase(drawables) {}
+			DrawableSingleThread(AZStd::vector<Drawable*> *drawables) : DrawableThreadBase(drawables) {}
 		public:
 			void Run();
 		};
@@ -326,7 +344,7 @@ namespace Cubism3 {
 		//limited number of threads, each thread updates a drawable.
 		class DrawableMultiThread : public DrawableThreadBase {
 		public:
-			DrawableMultiThread(AZStd::vector<Drawable*> &drawables, unsigned int limiter);
+			DrawableMultiThread(AZStd::vector<Drawable*> *drawables, unsigned int limiter);
 			~DrawableMultiThread();
 		public:
 			void Run();

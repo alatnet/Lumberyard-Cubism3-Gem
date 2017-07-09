@@ -106,6 +106,6 @@ namespace Cubism3
 
 	void Cubism3SystemComponent::LogMessage(const char * message) {
 		CryLog("[Cubism3] %s", message);
-		if (!Cubism3SystemComponent::logfunc) Cubism3SystemComponent::logfunc(message);
+		//if (!Cubism3SystemComponent::logfunc) Cubism3SystemComponent::logfunc(message);
 	}
 }

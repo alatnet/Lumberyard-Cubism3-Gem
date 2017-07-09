@@ -14,7 +14,8 @@
 #include <LyShine/Bus/UiTransform2dBus.h>
 #include <LyShine/IUiRenderer.h>
 
-//#include <AZCore/JSON/rapidjson.h>
+#include <AZCore/JSON/rapidjson.h>
+#include <AZCore/JSON/document.h>
 
 #include "Cubism3UIComponent.h"
 
@@ -57,6 +58,8 @@ namespace Cubism3 {
 		//this->drawMaskVisualBehindChildren = false;
 		//this->drawMaskVisualInFrontOfChildren = false;
 		this->useAlphaTest = false;
+
+		this->lType = Single;
 	}
 
 	Cubism3UIComponent::~Cubism3UIComponent() {
@@ -85,8 +88,10 @@ namespace Cubism3 {
 		if (serializeContext) {
 			serializeContext->Class<Cubism3UIComponent, AZ::Component>()
 				->Version(1)
+				->Field("LoadType", &Cubism3UIComponent::lType)
 				->Field("MocFile", &Cubism3UIComponent::m_mocPathname)
 				->Field("ImageFile", &Cubism3UIComponent::m_imagePathname)
+				->Field("JSONFile", &Cubism3UIComponent::m_jsonPathname)
 				->Field("Fill", &Cubism3UIComponent::fill)
 				->Field("Wireframe", &Cubism3UIComponent::wireframe)
 				->Field("Threading", &Cubism3UIComponent::m_threading)
@@ -109,11 +114,23 @@ namespace Cubism3 {
 					->Attribute(AZ::Edit::Attributes::ViewportIcon, "Editor/Icons/Components/Viewport/CharacterPhysics.png")
 					->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC("UI", 0x27ff46b0));
 
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::lType, "Load Type", "What type of Cubism3 Model to load.")
+					->EnumAttribute(Cubism3UIInterface::LoadType::Single, "Single")
+					->EnumAttribute(Cubism3UIInterface::LoadType::JSON, "JSON")
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnLoadTypeChange)
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, AZ_CRC("RefreshEntireTree", 0xefbc823c));
+
 				editInfo->DataElement(0, &Cubism3UIComponent::m_mocPathname, "Moc path", "The Moc path. Can be overridden by another component such as an interactable.")
+					->Attribute(AZ::Edit::Attributes::Visibility, &Cubism3UIComponent::IsLoadTypeSingle)
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnMocFileChange);
 
 				editInfo->DataElement(0, &Cubism3UIComponent::m_imagePathname, "Image path", "The Image path. Can be overridden by another component such as an interactable.")
+					->Attribute(AZ::Edit::Attributes::Visibility, &Cubism3UIComponent::IsLoadTypeSingle)
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnImageFileChange);
+
+				editInfo->DataElement(0, &Cubism3UIComponent::m_jsonPathname, "JSON path", "The JSON path. Can be overridden by another component such as an interactable.")
+					->Attribute(AZ::Edit::Attributes::Visibility, &Cubism3UIComponent::IsLoadTypeJSON)
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnJSONFileChange);
 
 				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::fill, "Fill", "Fill the model to the element's dimentions")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnFillChange);
@@ -200,7 +217,9 @@ namespace Cubism3 {
 								if (mask->constFlags & csmBlendAdditive) flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
 								else if (mask->constFlags & csmBlendMultiplicative) flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
 
-								renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
+								if (this->lType==Single) renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
+								else renderer->SetTexture(this->textures[mask->texId] ? (mask->texId > this->textures.size() ? renderer->GetWhiteTextureId() : this->textures[mask->texId]->GetTextureID()) : renderer->GetWhiteTextureId());
+
 								renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
 								renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
 								renderer->DrawDynVB(mask->verts, mask->indices, mask->vertCount, mask->indicesCount, prtTriangleList);
@@ -216,7 +235,10 @@ namespace Cubism3 {
 
 					if (this->wireframe) renderer->PushWireframeMode(R_WIREFRAME_MODE);
 					(d->constFlags & csmIsDoubleSided) ? renderer->SetCullMode(R_CULL_DISABLE) : renderer->SetCullMode(R_CULL_BACK);
-					renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
+
+					if (this->lType == Single) renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
+					else renderer->SetTexture(this->textures[d->texId] ? (d->texId > this->textures.size() ? renderer->GetWhiteTextureId() : this->textures[d->texId]->GetTextureID()) : renderer->GetWhiteTextureId());
+
 					renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
 					renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
 					renderer->DrawDynVB(d->verts, d->indices, d->vertCount, d->indicesCount, prtTriangleList);
@@ -383,6 +405,11 @@ namespace Cubism3 {
 	// ~UiRenderControlInterface
 
 	// Cubism3UIBus
+	//load type
+	void Cubism3UIComponent::SetLoadType(LoadType lt) {
+		this->lType = lt;
+		this->OnLoadTypeChange();
+	}
 	//pathnames
 	void Cubism3UIComponent::SetMocPathname(AZStd::string path) {
 		this->m_mocPathname.SetAssetPath(path.c_str());
@@ -398,6 +425,16 @@ namespace Cubism3 {
 	}
 	AZStd::string Cubism3UIComponent::GetTexturePathname() {
 		return this->m_imagePathname.GetAssetPath();
+	}
+
+	//json path
+	void Cubism3UIComponent::SetJSONPathname(AZStd::string path) {
+		this->m_jsonPathname.SetAssetPath(path.c_str());
+		this->OnJSONFileChange();
+
+	}
+	AZStd::string Cubism3UIComponent::GetJSONPathname() {
+		return this->m_jsonPathname.GetAssetPath();
 	}
 
 	//parameters
@@ -467,11 +504,11 @@ namespace Cubism3 {
 		//create a new update thread.
 		switch (this->m_threading) {
 		case SINGLE:
-			this->tJob = new DrawableSingleThread(this->drawables);
+			this->tJob = new DrawableSingleThread(&this->drawables);
 			this->tJob->SetModel(this->model);
 			break;
 		case MULTI:
-			this->tJob = new DrawableMultiThread(this->drawables, this->threadLimiter);
+			this->tJob = new DrawableMultiThread(&this->drawables, this->threadLimiter);
 			this->tJob->SetModel(this->model);
 			break;
 		}
@@ -488,22 +525,28 @@ namespace Cubism3 {
 	// ~Cubism3UIBus
 
 	void Cubism3UIComponent::LoadObject() {
-		if (!this->m_mocPathname.GetAssetPath().empty()) this->LoadMoc();
+		if (this->lType == Single) {
+			if (!this->m_mocPathname.GetAssetPath().empty()) this->LoadMoc();
+			if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
+		} else {
+			if (!this->m_jsonPathname.GetAssetPath().empty()) this->LoadJson();
+		}
 
-	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 		this->LoadAnimation();
-	#endif
-
-		if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
+		#endif
 	}
 	void Cubism3UIComponent::ReleaseObject() {
-		this->FreeTexture();
+		if (this->lType == Single) {
+			this->FreeTexture();
+			this->FreeMoc();
+		} else {
+			this->FreeJson();
+		}
 
-	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 		this->FreeAnimation();
-	#endif
-
-		this->FreeMoc();
+		#endif
 	}
 
 	void Cubism3UIComponent::LoadMoc() {
@@ -516,145 +559,172 @@ namespace Cubism3 {
 		AZ::u64 mocSize;
 		gEnv->pFileIO->Size(fileHandler, mocSize);
 
-		void *mocBuf = CryModuleMemalign(mocSize, csmAlignofMoc); //CryModuleMemalignFree
-		gEnv->pFileIO->Read(fileHandler, mocBuf, mocSize);
+		if (fileHandler != AZ::IO::InvalidHandle && mocSize > 0) {
+			void *mocBuf = CryModuleMemalign(mocSize, csmAlignofMoc); //CryModuleMemalignFree
+			gEnv->pFileIO->Read(fileHandler, mocBuf, mocSize);
 
-		gEnv->pFileIO->Close(fileHandler);
+			gEnv->pFileIO->Close(fileHandler);
 
-		this->moc = csmReviveMocInPlace(mocBuf, (unsigned int)mocSize);
+			this->moc = csmReviveMocInPlace(mocBuf, (unsigned int)mocSize);
 
-		//load model
-		unsigned int modelSize = csmGetSizeofModel(this->moc);
-		void * modelBuf = CryModuleMemalign(modelSize, csmAlignofModel); //CryModuleMemalignFree
+			if (this->moc) {
+				//load model
+				unsigned int modelSize = csmGetSizeofModel(this->moc);
+				void * modelBuf = CryModuleMemalign(modelSize, csmAlignofModel); //CryModuleMemalignFree
 
-		this->model = csmInitializeModelInPlace(this->moc, modelBuf, modelSize);
+				this->model = csmInitializeModelInPlace(this->moc, modelBuf, modelSize);
 
-		//get canvas info
-		csmVector2 canvasSize;
-		csmVector2 modelOrigin;
-		csmReadCanvasInfo(this->model, &canvasSize, &modelOrigin, &this->modelAspect);
-		this->modelCanvasSize = AZ::Vector2(canvasSize.X, canvasSize.Y);
-		this->modelOrigin = AZ::Vector2(modelOrigin.X, modelOrigin.Y);
+				if (this->model) {
+					//get canvas info
+					csmVector2 canvasSize;
+					csmVector2 modelOrigin;
+					csmReadCanvasInfo(this->model, &canvasSize, &modelOrigin, &this->modelAspect);
+					this->modelCanvasSize = AZ::Vector2(canvasSize.X, canvasSize.Y);
+					this->modelOrigin = AZ::Vector2(modelOrigin.X, modelOrigin.Y);
 
-		/*CryLog("Origin: %f, %f", this->modelOrigin.GetX(), this->modelOrigin.GetY());
-		CryLog("Canvas Size: %f, %f", this->modelCanvasSize.GetX(), this->modelCanvasSize.GetY());
-		CryLog("Origin Scaled: %f, %f", this->modelOrigin.GetX()/this->modelCanvasSize.GetX(), this->modelOrigin.GetX()/this->modelCanvasSize.GetY());*/
+					this->numTextures = 0;
 
-		//get the parameters of the model
-		const char** paramNames = csmGetParameterIds(this->model);
+					/*CryLog("Origin: %f, %f", this->modelOrigin.GetX(), this->modelOrigin.GetY());
+					CryLog("Canvas Size: %f, %f", this->modelCanvasSize.GetX(), this->modelCanvasSize.GetY());
+					CryLog("Origin Scaled: %f, %f", this->modelOrigin.GetX()/this->modelCanvasSize.GetX(), this->modelOrigin.GetX()/this->modelCanvasSize.GetY());*/
 
-		for (int i = 0; i < csmGetParameterCount(this->model); i++) {
-			Parameter * p = new Parameter;
-			p->id = i;
-			p->name = AZStd::string(paramNames[i]);
-			p->min = csmGetParameterMinimumValues(this->model)[i];
-			p->max = csmGetParameterMaximumValues(this->model)[i];
-			p->val = &csmGetParameterValues(this->model)[i];
+					//get the parameters of the model
+					const char** paramNames = csmGetParameterIds(this->model);
 
-			this->parameters.push_back(p);
-			this->parametersMap[p->name] = p->id;
-		}
-		this->parameters.shrink_to_fit(); //free up unused memory
+					for (int i = 0; i < csmGetParameterCount(this->model); i++) {
+						Parameter * p = new Parameter;
+						p->id = i;
+						p->name = AZStd::string(paramNames[i]);
+						p->min = csmGetParameterMinimumValues(this->model)[i];
+						p->max = csmGetParameterMaximumValues(this->model)[i];
+						p->val = &csmGetParameterValues(this->model)[i];
 
-		//load drawable data
-		const char** drawableNames = csmGetDrawableIds(this->model);
-		const csmFlags* constFlags = csmGetDrawableConstantFlags(this->model);
-		const csmFlags* dynFlags = csmGetDrawableDynamicFlags(this->model);
-		const int* texIndices = csmGetDrawableTextureIndices(this->model);
-		const float* opacities = csmGetDrawableOpacities(this->model);
-		const int* maskCounts = csmGetDrawableMaskCounts(this->model);
-		const int** masks = csmGetDrawableMasks(this->model);
-		const int* vertCount = csmGetDrawableVertexCounts(this->model);
-		const csmVector2** verts = csmGetDrawableVertexPositions(this->model);
-		const csmVector2** uvs = csmGetDrawableVertexUvs(this->model);
-		const int* numIndexes = csmGetDrawableIndexCounts(this->model);
-		const unsigned short** indices = csmGetDrawableIndices(this->model);
+						this->parameters.push_back(p);
+						this->parametersMap[p->name] = p->id;
+					}
+					this->parameters.shrink_to_fit(); //free up unused memory
 
-		unsigned int drawCount = csmGetDrawableCount(this->model);
-		const int * drawOrder = csmGetDrawableDrawOrders(this->model);
-		const int * renderOrder = csmGetDrawableRenderOrders(this->model);
+					//load drawable data
+					const char** drawableNames = csmGetDrawableIds(this->model);
+					const csmFlags* constFlags = csmGetDrawableConstantFlags(this->model);
+					const csmFlags* dynFlags = csmGetDrawableDynamicFlags(this->model);
+					const int* texIndices = csmGetDrawableTextureIndices(this->model);
+					const float* opacities = csmGetDrawableOpacities(this->model);
+					const int* maskCounts = csmGetDrawableMaskCounts(this->model);
+					const int** masks = csmGetDrawableMasks(this->model);
+					const int* vertCount = csmGetDrawableVertexCounts(this->model);
+					const csmVector2** verts = csmGetDrawableVertexPositions(this->model);
+					const csmVector2** uvs = csmGetDrawableVertexUvs(this->model);
+					const int* numIndexes = csmGetDrawableIndexCounts(this->model);
+					const unsigned short** indices = csmGetDrawableIndices(this->model);
 
-		float minX = 0.0f, minY = 0.0f, maxX = 0.0f, maxY = 0.0f;
-		
-		for (int i = 0; i < drawCount; ++i) {
-			Drawable * d = new Drawable;
-			d->name = drawableNames[i];
-			d->id = i;
-			d->constFlags = constFlags[i];
-			d->dynFlags = dynFlags[i];
-			d->texIndices = texIndices[i];
-			d->drawOrder = drawOrder[i];
-			d->renderOrder = renderOrder[i];
-			d->opacity = opacities[i];
-			d->packedOpacity = ColorF(1.0f, 1.0f, 1.0f, d->opacity).pack_argb8888();
-			d->maskCount = maskCounts[i];
+					unsigned int drawCount = csmGetDrawableCount(this->model);
+					const int * drawOrder = csmGetDrawableDrawOrders(this->model);
+					const int * renderOrder = csmGetDrawableRenderOrders(this->model);
 
-			d->maskIndices = new uint16[d->maskCount];
-			for (int in = 0; in < d->maskCount; in++) d->maskIndices[in] = masks[i][in];
+					float minX = 0.0f, minY = 0.0f, maxX = 0.0f, maxY = 0.0f;
 
-			d->transform = &this->transform;
-			d->uvTransform = &this->uvTransform;
+					for (int i = 0; i < drawCount; ++i) {
+						Drawable * d = new Drawable;
+						d->name = drawableNames[i];
+						d->id = i;
+						d->constFlags = constFlags[i];
+						d->dynFlags = dynFlags[i];
+						d->texId = texIndices[i];
+						if (d->texId > this->numTextures) this->numTextures = d->texId;
+						d->drawOrder = drawOrder[i];
+						d->renderOrder = renderOrder[i];
+						d->opacity = opacities[i];
+						d->packedOpacity = ColorF(1.0f, 1.0f, 1.0f, d->opacity).pack_argb8888();
+						d->maskCount = maskCounts[i];
 
-			d->vertCount = vertCount[i];
-			d->verts = new SVF_P3F_C4B_T2F[d->vertCount];
-			d->rawVerts = verts[i];
-			d->rawUVs = uvs[i];
+						d->maskIndices = new uint16[d->maskCount];
+						for (int in = 0; in < d->maskCount; in++) d->maskIndices[in] = masks[i][in];
 
-			for (int v = 0; v < d->vertCount; v++) {
-				d->verts[v].xyz = Vec3(0.0f, 0.0f, 0.0f);
-				d->verts[v].st = Vec2(0.0f, 0.0f);
-				d->verts[v].color.dcolor = d->packedOpacity;
+						d->transform = &this->transform;
+						d->uvTransform = &this->uvTransform;
 
-				if (d->rawVerts[v].X < minX) minX = d->rawVerts[v].X;
-				if (d->rawVerts[v].Y < minY) minY = d->rawVerts[v].Y;
+						d->vertCount = vertCount[i];
+						d->verts = new SVF_P3F_C4B_T2F[d->vertCount];
+						d->rawVerts = verts[i];
+						d->rawUVs = uvs[i];
 
-				if (d->rawVerts[v].X > maxX) maxX = d->rawVerts[v].X;
-				if (d->rawVerts[v].Y > maxY) maxY = d->rawVerts[v].Y;
+						for (int v = 0; v < d->vertCount; v++) {
+							d->verts[v].xyz = Vec3(0.0f, 0.0f, 0.0f);
+							d->verts[v].st = Vec2(0.0f, 0.0f);
+							d->verts[v].color.dcolor = d->packedOpacity;
+
+							if (d->rawVerts[v].X < minX) minX = d->rawVerts[v].X;
+							if (d->rawVerts[v].Y < minY) minY = d->rawVerts[v].Y;
+
+							if (d->rawVerts[v].X > maxX) maxX = d->rawVerts[v].X;
+							if (d->rawVerts[v].Y > maxY) maxY = d->rawVerts[v].Y;
+						}
+
+						d->indicesCount = numIndexes[i];
+						d->indices = new uint16[d->indicesCount];
+
+						for (int in = 0; in < d->indicesCount; in++) d->indices[in] = indices[i][in];
+
+						d->visible = d->dynFlags & csmIsVisible;
+
+						this->drawables.push_back(d);
+					}
+					this->drawables.shrink_to_fit(); //free up unused memory
+
+					this->numTextures++;
+
+					this->modelSize.SetX(abs(minX) + abs(maxX));
+					this->modelSize.SetY(abs(minY) + abs(maxY));
+
+					std::sort(this->drawables.begin(), this->drawables.end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; }); //sort the drawables by render order
+
+					this->threadMutex.Lock();
+					//threading
+					//create new update thread
+					if (this->tJob) {
+						this->tJob->Cancel();
+						this->tJob->WaitTillReady();
+						delete this->tJob;
+					}
+
+					switch (this->m_threading) {
+					case NONE:
+						this->tJob = nullptr;
+						break;
+					case SINGLE:
+						this->tJob = new DrawableSingleThread(&this->drawables);
+						this->tJob->SetModel(this->model);
+						break;
+					case MULTI:
+						this->tJob = new DrawableMultiThread(&this->drawables, this->threadLimiter);
+						this->tJob->SetModel(this->model);
+						break;
+					}
+
+					if (this->tJob) this->tJob->Start(); //start the update thread
+					this->threadMutex.Unlock();
+
+					this->modelLoaded = true;
+				} else {
+					CryModuleMemalignFree(this->model);
+					CryModuleMemalignFree(this->moc);
+					this->model = nullptr;
+					this->moc = nullptr;
+					this->modelLoaded = false;
+					CRY_ASSERT_MESSAGE(false, "Could not initialize model data.");
+				}
+			} else {
+				CryModuleMemalignFree(this->moc);
+				this->moc = nullptr;
+				this->modelLoaded = false;
+				CRY_ASSERT_MESSAGE(false, "Could not initialize moc data.");
 			}
-			
-			d->indicesCount = numIndexes[i];
-			d->indices = new uint16[d->indicesCount];
-
-			for (int in = 0; in < d->indicesCount; in++) d->indices[in] = indices[i][in];
-
-			d->visible = d->dynFlags & csmIsVisible;
-
-			this->drawables.push_back(d);
+		} else {
+			gEnv->pFileIO->Close(fileHandler);
+			this->modelLoaded = false;
+			CRY_ASSERT_MESSAGE(false, "Could not open Moc file.");
 		}
-		this->drawables.shrink_to_fit(); //free up unused memory
-
-		this->modelSize.SetX(abs(minX) + abs(maxX));
-		this->modelSize.SetY(abs(minY) + abs(maxY));
-
-		std::sort(this->drawables.begin(), this->drawables.end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; }); //sort the drawables by render order
-
-		this->threadMutex.Lock();
-		//threading
-		//create new update thread
-		if (this->tJob) {
-			this->tJob->Cancel();
-			this->tJob->WaitTillReady();
-			delete this->tJob;
-		}
-
-		switch (this->m_threading) {
-		case NONE:
-			this->tJob = nullptr;
-			break;
-		case SINGLE:
-			this->tJob = new DrawableSingleThread(this->drawables);
-			this->tJob->SetModel(this->model);
-			break;
-		case MULTI:
-			this->tJob = new DrawableMultiThread(this->drawables, this->threadLimiter);
-			this->tJob->SetModel(this->model);
-			break;
-		}
-
-		if (this->tJob) this->tJob->Start(); //start the update thread
-		this->threadMutex.Unlock();
-		this->modelLoaded = true;
-
 		this->prevViewport = AZ::Matrix4x4::CreateIdentity();
 	}
 	void Cubism3UIComponent::FreeMoc() {
@@ -691,13 +761,202 @@ namespace Cubism3 {
 	}
 
 	void Cubism3UIComponent::LoadTexture() {
-		if (this->m_imagePathname.GetAssetPath().empty()) return;
-		//load the texture
-		this->texture = gEnv->pSystem->GetIRenderer()->EF_LoadTexture(this->m_imagePathname.GetAssetPath().c_str(), FT_DONT_STREAM);
-		this->texture->AddRef(); //Release
+		if (lType == Single) {
+			if (this->m_imagePathname.GetAssetPath().empty()) return;
+			//load the texture
+			this->texture = gEnv->pSystem->GetIRenderer()->EF_LoadTexture(this->m_imagePathname.GetAssetPath().c_str(), FT_DONT_STREAM);
+			this->texture->AddRef(); //Release
+		} else {
+			//check for missing path names
+			for (AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> a : m_imagesPathname) if (a.GetAssetPath().empty()) return;
+
+			for (AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> a : m_imagesPathname) {
+				ITexture * t = gEnv->pSystem->GetIRenderer()->EF_LoadTexture(a.GetAssetPath().c_str(), FT_DONT_STREAM);
+				t->AddRef();
+				this->textures.push_back(t);
+			}
+		}
 	}
 	void Cubism3UIComponent::FreeTexture() {
 		SAFE_RELEASE(texture);
+		if (this->textures.size() > 0) {
+			for (ITexture* t : this->textures) {
+				SAFE_RELEASE(t);
+			}
+			this->textures.clear();
+			this->textures.shrink_to_fit();
+		}
+	}
+
+	//private string functions for usage in load json
+	bool endsWith(const AZStd::string& s, const AZStd::string& suffix) {
+		return s.size() >= suffix.size() &&
+			s.substr(s.size() - suffix.size()) == suffix;
+	}
+	AZStd::vector<AZStd::string> split(const AZStd::string& s, const AZStd::string& delimiter, const bool& removeEmptyEntries = false) {
+		AZStd::vector<AZStd::string> tokens;
+
+		for (size_t start = 0, end; start < s.length(); start = end + delimiter.length()) {
+			size_t position = s.find(delimiter, start);
+			end = position != AZStd::string::npos ? position : s.length();
+
+			AZStd::string token = s.substr(start, end - start);
+			if (!removeEmptyEntries || !token.empty()) {
+				tokens.push_back(token);
+			}
+		}
+
+		if (!removeEmptyEntries &&
+			(s.empty() || endsWith(s, delimiter))) {
+			tokens.push_back("");
+		}
+
+		return tokens;
+	}
+
+	void Cubism3UIComponent::LoadJson() {
+		if (this->m_jsonPathname.GetAssetPath().empty()) return;
+
+		AZStd::string basePath = PathUtil::GetPath(this->m_jsonPathname.GetAssetPath().c_str());
+		bool error = false;
+
+		//load the json file
+		AZ::IO::HandleType fileHandler;
+		gEnv->pFileIO->Open(this->m_jsonPathname.GetAssetPath().c_str(), AZ::IO::OpenMode::ModeRead | AZ::IO::OpenMode::ModeText, fileHandler);
+
+		AZ::u64 size;
+		gEnv->pFileIO->Size(fileHandler, size);
+
+		char *jsonBuff = (char *)malloc(size+1);
+		gEnv->pFileIO->Read(fileHandler, jsonBuff, size);
+
+		gEnv->pFileIO->Close(fileHandler);
+
+		jsonBuff[size] = '\0';
+		
+		//parse the json file
+		rapidjson::Document d;
+		d.Parse(jsonBuff);
+		free(jsonBuff);
+
+		//make sure the json file is valid
+		if (!d.IsObject()) {
+			CRY_ASSERT_MESSAGE(false, "JSON file not valid.");
+			error = true;
+		}
+
+		//version check
+		if (!error) {
+			if (d.HasMember("Version")) {
+				if (d["Version"].GetInt() != 3) {
+					CRY_ASSERT_MESSAGE(false, "incorrect model3.json version");
+					error = true;
+				}
+			} else {
+				CRY_ASSERT_MESSAGE(false, "model3.json does not have a Version definition");
+				error = true;
+			}
+		}
+
+		//file sanity check
+		if (!error) {
+			if (!d.HasMember("FileReferences")) {
+				CRY_ASSERT_MESSAGE(false, "model3.json does not have a FileReferences definition");
+				error = true;
+			}
+			if (!d["FileReferences"].HasMember("Moc")) {
+				CRY_ASSERT_MESSAGE(false, "model3.json does not have a Moc definition");
+				error = true;
+			}
+			if (!d["FileReferences"].HasMember("Textures")) {
+				CRY_ASSERT_MESSAGE(false, "model3.json does not have a Textures definition");
+				error = true;
+			}
+		}
+
+		if (!error) {
+			//load the moc
+			AZStd::string MocFileName = d["FileReferences"]["Moc"].GetString();
+			AZStd::string MocPath = basePath + MocFileName;
+			const char * sanitizedPath = PathUtil::ToNativePath(MocPath.c_str());
+
+			CryLog("Moc Path: %s", sanitizedPath);
+
+			//verify moc exists
+			if (gEnv->pFileIO->Exists(sanitizedPath)) {
+				this->m_mocPathname.SetAssetPath(sanitizedPath);
+				this->LoadMoc();
+			} else {
+				CRY_ASSERT_MESSAGE(false, "Moc file listed in JSON does not exist.");
+				error = true;
+			}
+
+			if (!error) {
+				//check to make sure we have the right number of textures
+				unsigned int textureListSize = d["FileReferences"]["Textures"].Size();
+
+				if (textureListSize != this->numTextures) {
+					CRY_ASSERT_MESSAGE(false, "number of textures listed in model3.json does not match moc's number of textures");
+					error = true;
+				}
+
+				if (!error) {
+					AZStd::vector<AZStd::string> assetFilter = split(LmbrCentral::TextureAsset::GetFileFilter(), "; ", true);
+
+					//verify textures exist
+					for (int i = 0; i < textureListSize; i++) { //for each texture listing
+						string textureFN = d["FileReferences"]["Textures"][i].GetString();
+						PathUtil::RemoveExtension(textureFN);
+						AZStd::string textureFileName = textureFN.c_str();
+						
+						bool found = false;
+						for (AZStd::string ext : assetFilter) { //for each asset extension
+							AZStd::string texturePath = basePath + textureFileName + ext.substr(1);
+							const char * sanitizedPath = PathUtil::ToNativePath(texturePath.c_str());
+
+							CryLog("Texture Path: %s", sanitizedPath);
+
+							if (gEnv->pFileIO->Exists(sanitizedPath)) {
+								found = true;
+								break;
+							}
+						}
+
+						if (!found) {
+							AZStd::string errorstr = "Texture listed in JSON does not exist: " + textureFileName;
+							CRY_ASSERT_MESSAGE(false, errorstr.c_str());
+							error = true;
+						}
+					}
+
+					//load the textures
+					if (!error) {
+						for (int i = 0; i < textureListSize; i++) {
+							AZStd::string textureFileName = d["FileReferences"]["Textures"][i].GetString();
+							AZStd::string texturePath = basePath + textureFileName;
+							const char * sanitizedPath = PathUtil::ToNativePath(texturePath.c_str());
+
+							AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> asset;
+							asset.SetAssetPath(sanitizedPath);
+
+							this->m_imagesPathname.push_back(asset);
+						}
+						this->m_imagesPathname.shrink_to_fit();
+						this->LoadTexture();
+					}
+				}
+			}
+		}
+
+		if (error) this->FreeJson();
+	}
+	void Cubism3UIComponent::FreeJson() {
+		this->m_mocPathname.SetAssetPath("");
+		this->m_imagesPathname.clear();
+		this->m_imagesPathname.shrink_to_fit();
+		this->m_imagePathname.SetAssetPath("");
+		this->FreeMoc();
+		this->FreeTexture();
 	}
 
 	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
@@ -762,11 +1021,32 @@ namespace Cubism3 {
 		this->FreeTexture();
 		if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
 	}
+	void Cubism3UIComponent::OnJSONFileChange() {
+		this->FreeJson();
+		this->LoadJson();
+		this->prevViewport = AZ::Matrix4x4::CreateIdentity();
+	}
 	void Cubism3UIComponent::OnThreadingChange() {
 		this->SetThreading(this->m_threading);
 	}
 	void Cubism3UIComponent::OnFillChange() {
 		this->prevViewport = AZ::Matrix4x4::CreateIdentity();
+	}
+	void Cubism3UIComponent::OnLoadTypeChange() {
+		this->m_mocPathname.SetAssetPath("");
+		this->m_imagePathname.SetAssetPath("");
+		this->m_jsonPathname.SetAssetPath("");
+		this->m_imagesPathname.clear();
+		this->m_imagesPathname.shrink_to_fit();
+
+		if (lType == Single) {
+			OnMocFileChange();
+			OnImageFileChange();
+		} else if (lType == JSON) {
+			OnJSONFileChange();
+		} else {
+			CRY_ASSERT_MESSAGE(false, "unhandled load type");
+		}
 	}
 
 	void Cubism3UIComponent::PreRender() {
@@ -963,10 +1243,9 @@ namespace Cubism3 {
 	}
 
 	//Threading stuff
-
 	///base thread
-	Cubism3UIComponent::DrawableThreadBase::DrawableThreadBase(AZStd::vector<Drawable*> &drawables) {
-		this->m_drawables = &drawables;
+	Cubism3UIComponent::DrawableThreadBase::DrawableThreadBase(AZStd::vector<Drawable*> *drawables) {
+		this->m_drawables = drawables;
 		this->m_renderOrderChanged = false;
 		this->m_canceled = false;
 	}
@@ -1102,8 +1381,7 @@ namespace Cubism3 {
 
 	///multithread alt
 	//limited number of threads, each thread updates a drawable.
-	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> &drawables, unsigned int limiter) : DrawableThreadBase(drawables) {
-		this->drawables = &drawables;
+	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> *drawables, unsigned int limiter) : DrawableThreadBase(drawables) {
 		m_threads = new SubThread*[limiter];
 		this->numThreads = limiter;
 

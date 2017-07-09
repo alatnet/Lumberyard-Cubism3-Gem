@@ -14,12 +14,12 @@ namespace Cubism3 {
 	public:
 		virtual ~Cubism3UIInterface() {}
 	public: //load type
-		/*enum LoadType {
+		enum LoadType {
 			Single, //Moc/Texture(s)
 			JSON //model3.json
 		};
 		virtual void SetLoadType(LoadType lt) = 0;
-		virtual LoadType GetLoadType() = 0;*/
+		virtual LoadType GetLoadType() = 0;
 
 	public: //pathnames (Moc/Texture)
 		virtual void SetMocPathname(AZStd::string path) = 0;
@@ -28,8 +28,8 @@ namespace Cubism3 {
 		virtual AZStd::string GetTexturePathname() = 0;
 
 	public: //JSON pathname
-		/*virtual void SetJSONPathname(AZStd::string path) = 0;
-		virtual AZStd::string GetJSONPathname() = 0;*/
+		virtual void SetJSONPathname(AZStd::string path) = 0;
+		virtual AZStd::string GetJSONPathname() = 0;
 		
 	public: //parameters
 		virtual int GetParameterCount() = 0;
