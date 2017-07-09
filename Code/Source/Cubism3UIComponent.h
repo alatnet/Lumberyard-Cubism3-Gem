@@ -1,16 +1,16 @@
 #pragma once
 
 #include <LyShine/Bus/UiRenderBus.h>
+#include <LyShine/Bus/UiTransformBus.h>
+#include <Cry_Color.h>
+#include <LyShine/Bus/UiTransform2dBus.h>
+#include <LyShine/Bus/UiRenderControlBus.h>
+#include <LyShine/Bus/UiMaskBus.h>
 
 #include <Cubism3/Cubism3UIBus.h>
 
 #include <AzCore/Component/Component.h>
 #include <AzCore/Serialization/SerializeContext.h>
-
-#include <AzCore/Math/Matrix3x3.h>
-#include <AzCore/Math/Matrix4x4.h>
-#include <AzCore/Math/Vector3.h>
-#include <AzCore/Math/Vector2.h>
 
 #include "../../Engine/LmbrCentral/include/LmbrCentral/Rendering/MaterialAsset.h"
 
@@ -32,7 +32,9 @@ namespace Cubism3 {
 	class Cubism3UIComponent
 		: public AZ::Component
 		, public UiRenderBus::Handler
-		, public Cubism3UIBus::Handler {
+		//, public UiRenderControlBus::Handler
+		, public Cubism3UIBus::Handler
+	{
 
 	public:
 		AZ_COMPONENT(Cubism3UIComponent, "{B132DFB2-D204-4394-9C90-3F3A0BD6A70A}", AZ::Component)
@@ -41,10 +43,17 @@ namespace Cubism3 {
 		Cubism3UIComponent();
 		~Cubism3UIComponent() override;
 
-	public:
-		// UiRenderInterface
-		void Render() override;
-		// ~UiRenderInterface
+	private:
+		//! Copying not allowed
+		Cubism3UIComponent(const Cubism3UIComponent&);
+		Cubism3UIComponent& operator=(const Cubism3UIComponent&);
+
+	protected: // member functions
+		// AZ::Component
+		void Init() override;
+		void Activate() override;
+		void Deactivate() override;
+		// ~AZ::Component
 
 	public:  // static member functions
 		static void GetProvidedServices(AZ::ComponentDescriptor::DependencyArrayType& provided) {
@@ -61,14 +70,19 @@ namespace Cubism3 {
 
 		static void Reflect(AZ::ReflectContext* context);
 
-	protected: // member functions
-		// AZ::Component
-		void Init() override;
-		void Activate() override;
-		void Deactivate() override;
-		// ~AZ::Component
+	public:
+		// UiRenderInterface
+		void Render() override;
+		// ~UiRenderInterface
 
-	protected:
+	public:
+		// UiRenderControlInterface
+		/*void SetupBeforeRenderingComponents(Pass pass) override;
+		void SetupAfterRenderingComponents(Pass pass) override;
+		void SetupAfterRenderingChildren(bool& isSecondComponentsPassRequired) override;*/
+		// ~UiRenderControlInterface
+
+	public:
 		// Cubism3UIBus
 		//pathnames
 		void SetMocPathname(AZStd::string path);
@@ -100,22 +114,9 @@ namespace Cubism3 {
 		unsigned int GetMultiThreadLimiter() { return this->threadLimiter; }
 		// ~Cubism3UIBus
 
-	private: //asset stuff
-		AzFramework::SimpleAssetReference<MocAsset> m_mocPathname;
-		AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> m_imagePathname;
-
-		//AzFramework::SimpleAssetReference<Cubism3Asset> m_jsonPathname;
-
-		//AZStd::vector<AzFramework::SimpleAssetReference<MotionAsset>> m_animationPathnames;
-		//AzFramework::SimpleAssetReference<MotionAsset> *m_AnimationPathname;
-
 	private:
 		void LoadObject();
 		void ReleaseObject();
-
-	private:
-		void OnMocFileChange();
-		void OnImageFileChange();
 
 	private:
 		void LoadMoc();
@@ -128,25 +129,35 @@ namespace Cubism3 {
 		void FreeAnimation();
 		#endif
 
-	private:
-		//! Copying not allowed
-		Cubism3UIComponent(const Cubism3UIComponent&);
-		Cubism3UIComponent& operator=(const Cubism3UIComponent&);
+	private: //on change notifications
+		void OnMocFileChange();
+		void OnImageFileChange();
+		void OnThreadingChange();
+		void OnFillChange();
+
+	private: //rendering updating
+		void PreRender();
+		void PostRender();
+		void EnableMasking();
+		void DisableMasking();
 
 	private:
-		csmMoc *moc;
-		//void * mocBuf;
+		csmMoc * moc;
 		csmModel * model;
-		//void * modelBuf;
 		ITexture * texture;
 
-		AZ::Vector2 modelSize;
+		AZ::Vector2 modelCanvasSize;
+		AZ::Vector2 modelOrigin;
+		float modelAspect;
 
-		//AZStd::vector<ITexture*> textures;
+		AZ::Vector2 modelSize;
+		bool fill;
+
+		AZStd::vector<ITexture*> textures;
 
 		bool modelLoaded;
 
-		//animation stuff
+	private: //animation stuff
 		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 		csmFloatSink* sink;
 		//void* sinkBuf;
@@ -176,6 +187,16 @@ namespace Cubism3 {
 		AZStd::vector<AnimationLayer*> animations;
 		#endif
 
+	private: //asset stuff
+		AzFramework::SimpleAssetReference<MocAsset> m_mocPathname;
+		AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> m_imagePathname;
+		
+		AzFramework::SimpleAssetReference<Cubism3Asset> m_jsonPathname;
+		AZStd::vector<AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset>> m_imagesPathname;
+
+		//AZStd::vector<AzFramework::SimpleAssetReference<MotionAsset>> m_animationPathnames;
+		//AzFramework::SimpleAssetReference<MotionAsset> *m_AnimationPathname;
+
 	private: //parameter stuff
 		typedef struct Parameter {
 			AZStd::string name;
@@ -188,7 +209,11 @@ namespace Cubism3 {
 		AZStd::unordered_map<AZStd::string, int> parametersMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
 	private: //drawable stuff
-		AZ::Matrix4x4 prevTransform, transform, uvTransform;
+		AZ::Matrix4x4 transform, uvTransform, prevViewport;
+		bool transformUpdated;
+
+		UiTransform2dInterface::Anchors prevAnchors;
+		UiTransform2dInterface::Offsets prevOffsets;
 
 		typedef struct Drawable {
 			AZStd::string name; //csmGetDrawableIds
@@ -223,18 +248,13 @@ namespace Cubism3 {
 
 		AZStd::vector<Drawable*> drawables;
 
-		bool wireframe;
+		bool renderOrderChanged;
 
-	private:
-		AZ::Vector2 modelCanvasSize;
-		AZ::Vector2 modelOrigin;
-		float modelAspect;
+		bool wireframe;
 
 	private: //threading stuff
 		Cubism3UIInterface::Threading m_threading;
 		static Cubism3UIInterface::Threading m_threadingOverride;
-
-		void OnThreadingChange();
 
 		class DrawableThreadBase : public CryThread<CryRunnable> {
 		public:
@@ -340,5 +360,14 @@ namespace Cubism3 {
 		DrawableThreadBase *tJob;
 		unsigned int threadLimiter;
 		CryMutex threadMutex; //used to block when creating or destroying the update thread.
+
+	private: //masking stuff
+		bool enableMasking;
+		//bool drawMaskVisualBehindChildren;
+		//bool drawMaskVisualInFrontOfChildren;
+		bool useAlphaTest;
+		//bool maskInteraction;
+		int priorBaseState;
+		//Pass currPass;
 	};
 }

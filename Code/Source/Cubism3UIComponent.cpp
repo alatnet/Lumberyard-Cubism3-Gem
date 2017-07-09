@@ -1,7 +1,5 @@
 #include "StdAfx.h"
 
-#include "Cubism3UIComponent.h"
-
 #include <AzCore/Math/Crc.h>
 #include <AzCore/Serialization/SerializeContext.h>
 #include <AzCore/Serialization/EditContext.h>
@@ -13,13 +11,12 @@
 #include <LyShine/IDraw2d.h>
 #include <LyShine/UiSerializeHelpers.h>
 #include <LyShine/Bus/UiElementBus.h>
-//#include <LyShine/Bus/UiCanvasBus.h>
-#include <LyShine/Bus/UiTransformBus.h>
 #include <LyShine/Bus/UiTransform2dBus.h>
-//#include <LyShine/ISprite.h>
 #include <LyShine/IUiRenderer.h>
 
 //#include <AZCore/JSON/rapidjson.h>
+
+#include "Cubism3UIComponent.h"
 
 namespace Cubism3 {
 	#ifdef CUBISM3_THREADING
@@ -28,20 +25,23 @@ namespace Cubism3 {
 		Cubism3UIInterface::Threading Cubism3UIComponent::m_threadingOverride = Cubism3UIInterface::Threading::DISABLED;
 	#endif
 
+		const char* cubism3_profileMarker = "UI_CUBISM3";
+		const char* cubism3_maskIncProfileMarker = "UI_CUBISM3_MASK_INC";
+		const char* cubism3_maskDecProfileMarker = "UI_CUBISM3_MASK_DEC";
+
 	Cubism3UIComponent::Cubism3UIComponent() {
-		this->transform = AZ::Matrix4x4::CreateIdentity();
-		this->prevTransform = AZ::Matrix4x4::CreateZero();
+		this->transform = this->prevViewport =  AZ::Matrix4x4::CreateIdentity();
+		this->transformUpdated = false;
 		this->uvTransform = AZ::Matrix4x4::CreateIdentity() * AZ::Matrix4x4::CreateScale(AZ::Vector3(1.0f, -1.0f, 1.0f)); //flip the texture on the y vector
+		
+		this->prevAnchors = UiTransform2dInterface::Anchors(0.4f,0.4f,0.4f,0.4f);
+		this->prevOffsets = UiTransform2dInterface::Offsets(-40,-40,40,40);
 
 		this->moc = nullptr;
 		this->model = nullptr;
 		this->texture = nullptr;
 
 		this->modelLoaded = false;
-
-		//this->allverts = nullptr;
-
-		//this->rType = rtSequential;
 
 		this->m_threading = NONE;
 		this->tJob = nullptr;
@@ -50,11 +50,33 @@ namespace Cubism3 {
 
 		this->wireframe = false;
 
-		this->modelSize = AZ::Vector2(1.0f, 1.0f);
+		this->modelSize = AZ::Vector2(0.0f, 0.0f);
+		this->fill = false;
+
+		this->enableMasking = true;
+		//this->drawMaskVisualBehindChildren = false;
+		//this->drawMaskVisualInFrontOfChildren = false;
+		this->useAlphaTest = false;
 	}
 
 	Cubism3UIComponent::~Cubism3UIComponent() {
 		this->ReleaseObject();
+	}
+
+	void Cubism3UIComponent::Init() {
+		this->LoadObject();
+	}
+
+	void Cubism3UIComponent::Activate() {
+		UiRenderBus::Handler::BusConnect(m_entity->GetId());
+		//UiRenderControlBus::Handler::BusConnect(m_entity->GetId());
+		Cubism3UIBus::Handler::BusConnect(m_entity->GetId());
+	}
+
+	void Cubism3UIComponent::Deactivate() {
+		UiRenderBus::Handler::BusDisconnect();
+		//UiRenderControlBus::Handler::BusDisconnect();
+		Cubism3UIBus::Handler::BusDisconnect();
 	}
 
 	void Cubism3UIComponent::Reflect(AZ::ReflectContext* context) {
@@ -65,8 +87,13 @@ namespace Cubism3 {
 				->Version(1)
 				->Field("MocFile", &Cubism3UIComponent::m_mocPathname)
 				->Field("ImageFile", &Cubism3UIComponent::m_imagePathname)
+				->Field("Fill", &Cubism3UIComponent::fill)
 				->Field("Wireframe", &Cubism3UIComponent::wireframe)
 				->Field("Threading", &Cubism3UIComponent::m_threading)
+				->Field("Masking", &Cubism3UIComponent::enableMasking)
+				//->Field("Masking_DrawBehindChildren", &Cubism3UIComponent::drawMaskVisualBehindChildren)
+				//->Field("Masking_DrawInFrontChildren", &Cubism3UIComponent::drawMaskVisualInFrontOfChildren)
+				->Field("Masking_Alpha", &Cubism3UIComponent::useAlphaTest)
 				//->Field("RenderType", &Cubism3UIComponent::rType)
 			#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 				->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames)
@@ -88,13 +115,22 @@ namespace Cubism3 {
 				editInfo->DataElement(0, &Cubism3UIComponent::m_imagePathname, "Image path", "The Image path. Can be overridden by another component such as an interactable.")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnImageFileChange);
 
-				editInfo->DataElement(0, &Cubism3UIComponent::wireframe, "Wireframe (Debug)", "Wireframe Mode");
+				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::fill, "Fill", "Fill the model to the element's dimentions")
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnFillChange);
+
+				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::wireframe, "Wireframe (Debug)", "Wireframe Mode");
 
 				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::m_threading, "Threading (Debug)", "Threading Mode")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnThreadingChange)
 					->EnumAttribute(Cubism3UIInterface::Threading::NONE, "None")
 					->EnumAttribute(Cubism3UIInterface::Threading::SINGLE, "Single")
 					->EnumAttribute(Cubism3UIInterface::Threading::MULTI, "Multi");
+
+				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::enableMasking, "Enable masking",
+					"Enable masking usage of the Cubism3 model.");
+
+				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::useAlphaTest, "Use alpha test",
+					"Check this box to use the alpha channel in the mask visual's texture to define the mask.");
 
 			}
 		}
@@ -138,94 +174,42 @@ namespace Cubism3 {
 		}
 	}
 
-	void Cubism3UIComponent::Init() {
-		this->LoadObject();
-	}
-
-	void Cubism3UIComponent::Activate() {
-		UiRenderBus::Handler::BusConnect(m_entity->GetId());
-		Cubism3UIBus::Handler::BusConnect(m_entity->GetId());
-	}
-
-	void Cubism3UIComponent::Deactivate() {
-		UiRenderBus::Handler::BusDisconnect();
-		Cubism3UIBus::Handler::BusDisconnect();
-	}
-
+	// UiRenderInterface
 	void Cubism3UIComponent::Render() {
 		this->threadMutex.Lock();
-		const char* profileMarker = "UI_CUBISM3";
-		gEnv->pRenderer->PushProfileMarker(profileMarker);
+		gEnv->pRenderer->PushProfileMarker(cubism3_profileMarker);
 
 		IRenderer *renderer = gEnv->pRenderer;
 
 		if (this->modelLoaded) {
-			//threading
-			//if we are threading the drawable updates
-			if (this->m_threading != NONE && this->tJob) this->tJob->WaitTillReady(); //wait until the update thread is ready.
+			this->PreRender();
 
-			#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-			if (this->animations.size() != 0) {
-				for (AnimationLayer* layer : this->animations) {
-					if (layer->enabled) {
-						csmTickAnimationState(&layer->State, gEnv->pTimer->GetFrameTime());
-						csmEvaluateAnimation(
-							layer->Animation,
-							&layer->State,
-							layer->Blend,
-							layer->Weight,
-							this->sink
-						);
-					}
-				}
-
-				csmFlushFloatSink(this->sink, this->model, 0, 0);
-			}
-			#endif
-
-			if (this->m_threading == NONE && !this->tJob)
-				csmUpdateModel(this->model);
-
-			AZ::Matrix4x4 viewport;
-			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformToViewport, viewport);
-
-			UiTransformInterface::RectPoints points;
-			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetCanvasSpacePointsNoScaleRotate, points);
-
-			UiTransformInterface::Rect rect;
-			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetCanvasSpaceRectNoScaleRotate, rect);
-
-			AZ::Vector2 rectSize = rect.GetSize();
-
-			this->transform =
-				viewport * 
-				AZ::Matrix4x4::CreateTranslation( //translate the object
-					AZ::Vector3(
-						points.pt[UiTransformInterface::RectPoints::Corner_TopLeft].GetX() + (rectSize.GetX() / 2),
-						points.pt[UiTransformInterface::RectPoints::Corner_TopLeft].GetY() + (rectSize.GetY() / 2),
-						0.0f
-					)
-				) * 
-				AZ::Matrix4x4::CreateScale( //scale the object
-					AZ::Vector3(
-						rectSize.GetX() / this->modelSize.GetX(),
-						-(rectSize.GetY() / this->modelSize.GetY()),
-						1.0f
-					)
-				);
-
-			bool transformUpdated = false;
-			if (this->transform != this->prevTransform) {
-				this->prevTransform = this->transform;
-				transformUpdated = true;
-			}
-
-			bool renderOrderChanged = false;
+			this->renderOrderChanged = false;
 			for (Drawable * d : this->drawables) {
 				if (this->m_threading == NONE && !this->tJob)
-					d->update(this->model, transformUpdated, renderOrderChanged);
+					d->update(this->model, this->transformUpdated, this->renderOrderChanged);
 
 				if (d->visible) {
+					//draw masking drawable
+					if (this->enableMasking) {
+						if (d->maskCount > 0) {
+							this->EnableMasking();
+							for (int i = 0; i < d->maskCount; i++) {
+								Drawable * mask = this->drawables[d->maskIndices[i]];
+								int flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
+								if (mask->constFlags & csmBlendAdditive) flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
+								else if (mask->constFlags & csmBlendMultiplicative) flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+
+								renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
+								renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
+								renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
+								renderer->DrawDynVB(mask->verts, mask->indices, mask->vertCount, mask->indicesCount, prtTriangleList);
+							}
+							this->DisableMasking();
+						}
+					}
+
+					//draw drawable
 					int flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
 					if (d->constFlags & csmBlendAdditive) flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
 					else if (d->constFlags & csmBlendMultiplicative) flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
@@ -233,20 +217,14 @@ namespace Cubism3 {
 					if (this->wireframe) renderer->PushWireframeMode(R_WIREFRAME_MODE);
 					(d->constFlags & csmIsDoubleSided) ? renderer->SetCullMode(R_CULL_DISABLE) : renderer->SetCullMode(R_CULL_BACK);
 					renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
-					renderer->SetState(flags | IUiRenderer::Get()->GetBaseState() | GS_NODEPTHTEST);
+					renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
 					renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
 					renderer->DrawDynVB(d->verts, d->indices, d->vertCount, d->indicesCount, prtTriangleList);
 					if (this->wireframe) renderer->PopWireframeMode();
 				}
 			}
 
-			//threading
-			if (this->m_threading != NONE && this->tJob) { //if update is threaded
-				this->tJob->SetTransformUpdate(transformUpdated); //notify that the transform has updated or not //TRANSFORM
-				this->tJob->Notify(); //wake up the update thread.
-			} else {
-				if (renderOrderChanged) std::sort(this->drawables.begin(), this->drawables.end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; });
-			}
+			this->PostRender();
 		} else {
 			//draw a blank space
 			UiTransformInterface::RectPoints points;
@@ -300,350 +278,109 @@ namespace Cubism3 {
 			);
 		}
 
-		gEnv->pRenderer->PopProfileMarker(profileMarker);
+		gEnv->pRenderer->PopProfileMarker(cubism3_profileMarker);
 		this->threadMutex.Unlock();
 	}
+	//rendering process
+	///for each drawable
+	/// for each mask drawable in drawable
+	///   draw mask
+	/// end
+	/// draw drawable
+	///end
+	// ~UiRenderInterface
 
-	void Cubism3UIComponent::LoadObject() {
-		if (!this->m_mocPathname.GetAssetPath().empty()) this->LoadMoc();
+	// UiRenderControlInterface
+	/*void Cubism3UIComponent::SetupBeforeRenderingComponents(Pass pass) {
+		this->currPass = pass;
+		if (this->modelLoaded && pass == Pass::First) this->PreRender();
 
-	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-		this->LoadAnimation();
-	#endif
+		//enable masking
+		if (pass == Pass::First)
+			this->priorBaseState = IUiRenderer::Get()->GetBaseState();
 
-		if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
-	}
-	void Cubism3UIComponent::ReleaseObject() {
-		this->FreeTexture();
+		int alphaTest = 0;
+		if (this->useAlphaTest) alphaTest = GS_ALPHATEST_GREATER;
 
-	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-		this->FreeAnimation();
-	#endif
-
-		this->FreeMoc();
-	}
-
-	void Cubism3UIComponent::LoadMoc() {
-		if (this->m_mocPathname.GetAssetPath().empty()) return;
-
-		//read moc file
-		AZ::IO::HandleType fileHandler;
-		gEnv->pFileIO->Open(this->m_mocPathname.GetAssetPath().c_str(), AZ::IO::OpenMode::ModeRead | AZ::IO::OpenMode::ModeBinary, fileHandler);
-
-		AZ::u64 mocSize;
-		gEnv->pFileIO->Size(fileHandler, mocSize);
-
-		void *mocBuf = CryModuleMemalign(mocSize, csmAlignofMoc); //CryModuleMemalignFree
-		gEnv->pFileIO->Read(fileHandler, mocBuf, mocSize);
-
-		gEnv->pFileIO->Close(fileHandler);
-
-		this->moc = csmReviveMocInPlace(mocBuf, (unsigned int)mocSize);
-
-		//load model
-		unsigned int modelSize = csmGetSizeofModel(this->moc);
-		void * modelBuf = CryModuleMemalign(modelSize, csmAlignofModel); //CryModuleMemalignFree
-
-		this->model = csmInitializeModelInPlace(this->moc, modelBuf, modelSize);
-
-		//get canvas info
-		csmVector2 canvasSize;
-		csmVector2 modelOrigin;
-		csmReadCanvasInfo(this->model, &canvasSize, &modelOrigin, &this->modelAspect);
-		this->modelCanvasSize = AZ::Vector2(canvasSize.X, canvasSize.Y);
-		this->modelOrigin = AZ::Vector2(modelOrigin.X, modelOrigin.Y);
-
-		//get the parameters of the model
-		const char** paramNames = csmGetParameterIds(this->model);
-
-		for (int i = 0; i < csmGetParameterCount(this->model); i++) {
-			Parameter * p = new Parameter;
-			p->id = i;
-			p->name = AZStd::string(paramNames[i]);
-			p->min = csmGetParameterMinimumValues(this->model)[i];
-			p->max = csmGetParameterMaximumValues(this->model)[i];
-			p->val = &csmGetParameterValues(this->model)[i];
-
-			this->parameters.push_back(p);
-			this->parametersMap[p->name] = p->id;
+		int colorMask = GS_COLMASK_NONE;
+		if (
+			(this->drawMaskVisualBehindChildren && pass == Pass::First) ||
+			(this->drawMaskVisualInFrontOfChildren && pass == Pass::Second)
+		) {
+			colorMask = 0;
 		}
-		this->parameters.shrink_to_fit(); //free up unused memory
 
-		//load drawable data
-		const char** drawableNames = csmGetDrawableIds(this->model);
-		const csmFlags* constFlags = csmGetDrawableConstantFlags(this->model);
-		const csmFlags* dynFlags = csmGetDrawableDynamicFlags(this->model);
-		const int* texIndices = csmGetDrawableTextureIndices(this->model);
-		const float* opacities = csmGetDrawableOpacities(this->model);
-		const int* maskCounts = csmGetDrawableMaskCounts(this->model);
-		const int** masks = csmGetDrawableMasks(this->model);
-		const int* vertCount = csmGetDrawableVertexCounts(this->model);
-		const csmVector2** verts = csmGetDrawableVertexPositions(this->model);
-		const csmVector2** uvs = csmGetDrawableVertexUvs(this->model);
-		const int* numIndexes = csmGetDrawableIndexCounts(this->model);
-		const unsigned short** indices = csmGetDrawableIndices(this->model);
-
-		unsigned int drawCount = csmGetDrawableCount(this->model);
-		const int * drawOrder = csmGetDrawableDrawOrders(this->model);
-		const int * renderOrder = csmGetDrawableRenderOrders(this->model);
-
-		std::string drawString = "";
-		std::string renderString = "";
-
-		float minX = 0.0f, minY = 0.0f, maxX = 0.0f, maxY = 0.0f;
-		
-		for (int i = 0; i < drawCount; ++i) {
-			drawString += std::to_string(drawOrder[i]);
-			renderString += std::to_string(renderOrder[i]);
-			if (i != drawCount - 1) {
-				drawString += ", ";
-				renderString += ", ";
+		if (this->enableMasking) {
+			int passOp = 0;
+			if (pass == Pass::First) {
+				passOp = STENCOP_PASS(FSS_STENCOP_INCR);
+				gEnv->pRenderer->PushProfileMarker(cubism3_maskIncProfileMarker);
+			} else {
+				passOp = STENCOP_PASS(FSS_STENCOP_DECR);
+				gEnv->pRenderer->PushProfileMarker(cubism3_maskDecProfileMarker);
 			}
 
-			Drawable * d = new Drawable;
-			d->name = drawableNames[i];
-			d->id = i;
-			d->constFlags = constFlags[i];
-			d->dynFlags = dynFlags[i];
-			d->texIndices = texIndices[i];
-			d->drawOrder = drawOrder[i];
-			d->renderOrder = renderOrder[i];
-			d->opacity = opacities[i];
-			d->packedOpacity = ColorF(1.0f, 1.0f, 1.0f, d->opacity).pack_argb8888();
-			d->maskCount = maskCounts[i];
+			// set up for stencil write
+			const uint32 stencilRef = IUiRenderer::Get()->GetStencilRef();
+			const uint32 stencilMask = 0xFF;
+			const uint32 stencilWriteMask = 0xFF;
+			const int32 stencilState = STENC_FUNC(FSS_STENCFUNC_EQUAL)
+				| STENCOP_FAIL(FSS_STENCOP_KEEP) | STENCOP_ZFAIL(FSS_STENCOP_KEEP) | passOp;
+			gEnv->pRenderer->SetStencilState(stencilState, stencilRef, stencilMask, stencilWriteMask);
 
-			d->maskIndices = new uint16[d->maskCount];
-			for (int in = 0; in < d->maskCount; in++) d->maskIndices[in] = masks[i][in];
-
-			d->transform = &this->transform;
-			d->uvTransform = &this->uvTransform;
-
-			d->vertCount = vertCount[i];
-			d->verts = new SVF_P3F_C4B_T2F[d->vertCount];
-			d->rawVerts = verts[i];
-			d->rawUVs = uvs[i];
-
-			for (int v = 0; v < d->vertCount; v++) {
-				d->verts[v].xyz = Vec3(0.0f, 0.0f, 0.0f);
-				d->verts[v].st = Vec2(0.0f, 0.0f);
-				d->verts[v].color.dcolor = d->packedOpacity;
-
-				if (d->rawVerts[v].X < minX) minX = d->rawVerts[v].X;
-				if (d->rawVerts[v].Y < minY) minY = d->rawVerts[v].Y;
-
-				if (d->rawVerts[v].X > maxX) maxX = d->rawVerts[v].X;
-				if (d->rawVerts[v].Y > maxY) maxY = d->rawVerts[v].Y;
-			}
-			
-			d->indicesCount = numIndexes[i];
-			d->indices = new uint16[d->indicesCount];
-
-			for (int in = 0; in < d->indicesCount; in++) d->indices[in] = indices[i][in];
-
-			d->visible = d->dynFlags & csmIsVisible;
-
-			this->drawables.push_back(d);
+			IUiRenderer::Get()->SetBaseState(this->priorBaseState | GS_STENCIL | alphaTest | colorMask);
+		} else {
+			//if (colorMask || alphaTest) {
+				IUiRenderer::Get()->SetBaseState(this->priorBaseState | colorMask | alphaTest);
+			//}
 		}
-		this->drawables.shrink_to_fit(); //free up unused memory
-
-		this->modelSize.SetX(abs(minX) + abs(maxX));
-		this->modelSize.SetY(abs(minY) + abs(maxY));
-
-		std::sort(this->drawables.begin(), this->drawables.end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; }); //sort the drawables by render order
-
-		this->threadMutex.Lock();
-		//threading
-		//create new update thread
-		if (this->tJob) {
-			this->tJob->Cancel();
-			this->tJob->WaitTillReady();
-			delete this->tJob;
-		}
-
-		switch (this->m_threading) {
-		case NONE:
-			this->tJob = nullptr;
-			break;
-		case SINGLE:
-			this->tJob = new DrawableSingleThread(this->drawables);
-			this->tJob->SetModel(this->model);
-			break;
-		case MULTI:
-			this->tJob = new DrawableMultiThread(this->drawables, this->threadLimiter);
-			this->tJob->SetModel(this->model);
-			break;
-		}
-
-		if (this->tJob) this->tJob->Start(); //start the update thread
-		this->threadMutex.Unlock();
-		this->modelLoaded = true;
-	}
-	void Cubism3UIComponent::FreeMoc() {
-		this->modelLoaded = false;
-		//delete the drawable update thread
-		this->threadMutex.Lock();
-		if (this->tJob) {
-			this->tJob->Cancel();
-			this->tJob->WaitTillReady();
-			delete this->tJob;
-			this->tJob = nullptr;
-		}
-		this->threadMutex.Unlock();
-
-		if (this->drawables.size() != 0) {
-			for (Drawable * d : this->drawables) {
-				delete d->verts; //delete the vector data
-				delete d->indices; //delete the indices data
-				delete d->maskIndices; //delete the mask indices
-			}
-			this->drawables.clear(); //clear the drawables vector
-		}
-
-		if (this->parameters.size() != 0) {
-			this->parameters.clear(); //clear the parameters vector
-			this->parametersMap.clear(); //clear the parameters vector
-		}
-
-		if (this->model) CryModuleMemalignFree(this->model); //free the model
-		if (this->moc) CryModuleMemalignFree(this->moc); //free the moc
-
-		this->model = nullptr;
-		this->moc = nullptr;
-	}
-
-	void Cubism3UIComponent::LoadTexture() {
-		if (this->m_imagePathname.GetAssetPath().empty()) return;
-		//load the texture
-		this->texture = gEnv->pSystem->GetIRenderer()->EF_LoadTexture(this->m_imagePathname.GetAssetPath().c_str(), FT_DONT_STREAM);
-		this->texture->AddRef(); //Release
-	}
-	void Cubism3UIComponent::FreeTexture() {
-		SAFE_RELEASE(texture);
-	}
-
-	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-	void Cubism3UIComponent::LoadAnimation() {
-		//load animations
-		if (this->m_animationPathnames.size() != 0) {
-			for (AzFramework::SimpleAssetReference<MotionAsset> asset : this->m_animationPathnames) {
-				if (asset.GetAssetPath().empty()) continue;
-
-				AZ::IO::HandleType animFileHandler;
-				gEnv->pFileIO->Open(asset.GetAssetPath().c_str(), AZ::IO::OpenMode::ModeBinary, animFileHandler);
-
-				AZ::u64 motionJsonSize;
-				gEnv->pFileIO->Size(animFileHandler, motionJsonSize);
-
-				char * motionJson = (char *)malloc(motionJsonSize);
-				gEnv->pFileIO->Read(animFileHandler, motionJson, motionJsonSize);
-
-				gEnv->pFileIO->Close(animFileHandler);
-
-				AnimationLayer* layer = new AnimationLayer; //delete
-				layer->Blend = csmOverrideFloatBlendFunction;
-				layer->Weight = 1.0f;
-				layer->enabled = false;
-				csmResetAnimationState(&layer->State);
-
-				unsigned int animSize = csmGetDeserializedSizeofAnimation(motionJson);
-
-				void * animbuff = malloc(animSize); //free
-				layer->Animation = csmDeserializeAnimationInPlace(motionJson, animbuff, animSize);
-
-				free(motionJson);
-
-				this->animations.push_back(layer);
-			}
-			this->animations.shrink_to_fit();
-		}
-
-		//load sink
-		unsigned int sinkSize = csmGetSizeofFloatSink(this->model);
-		void *sinkBuf = malloc(sinkSize); //free
-		this->sink = csmInitializeFloatSinkInPlace(this->model, sinkBuf, sinkSize);
-	}
-	void Cubism3UIComponent::FreeAnimation() {
-		if (this->sink) free(this->sink); //free the float sink
-
-		if (this->animations.size() != 0) {
-			for (AnimationLayer* layer : this->animations) free(layer->Animation); //free each animation
-			this->animations.clear(); //clear the animations vector
-		}
-
-		this->sink = nullptr;
-	}
-	#endif
-
-	void Cubism3UIComponent::OnMocFileChange() {
-		this->FreeMoc();
-		if (!this->m_mocPathname.GetAssetPath().empty()) this->LoadMoc();
-	}
-	void Cubism3UIComponent::OnImageFileChange() {
-		this->FreeTexture();
-		if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
-	}
-
-	void Cubism3UIComponent::Drawable::update(csmModel* model, bool transformUpdate, bool &renderOrderChanged) {
-		this->dynFlags = csmGetDrawableDynamicFlags(model)[this->id];
-
-		if (this->dynFlags & csmVisibilityDidChange) this->visible = this->dynFlags & csmIsVisible;
-
-		if (this->dynFlags & csmOpacityDidChange) {
-			this->opacity = csmGetDrawableOpacities(model)[this->id];
-			this->packedOpacity = ColorF(1.0f, 1.0f, 1.0f, this->opacity).pack_argb8888();
-			for (int i = 0; i < this->vertCount; i++) this->verts[i].color.dcolor = this->packedOpacity;
-		}
-
-		if (this->dynFlags & csmDrawOrderDidChange) this->drawOrder = csmGetDrawableDrawOrders(model)[this->id];
-		if (this->dynFlags & csmRenderOrderDidChange) {
-			this->renderOrder = csmGetDrawableRenderOrders(model)[this->id];
-			renderOrderChanged = true;
-		}
-
-		if (this->dynFlags & csmVertexPositionsDidChange) {
-			//vertexes
-			const int vertCount = csmGetDrawableVertexCounts(model)[this->id];
-
-			//recreate buffer if needed
-			if (vertCount != this->vertCount) {
-				delete this->verts;
-				this->vertCount = vertCount;
-				this->verts = new SVF_P3F_C4B_T2F[this->vertCount];
+	};*/
+	/*void Cubism3UIComponent::SetupAfterRenderingComponents(Pass pass) {
+		//disable masking
+		if (this->enableMasking) {
+			if (pass == Pass::First) {
+				IUiRenderer::Get()->IncrementStencilRef();
+				gEnv->pRenderer->PopProfileMarker(cubism3_maskIncProfileMarker);
+			} else {
+				IUiRenderer::Get()->DecrementStencilRef();
+				gEnv->pRenderer->PopProfileMarker(cubism3_maskDecProfileMarker);
 			}
 
-			this->rawVerts = csmGetDrawableVertexPositions(model)[this->id];
-			this->rawUVs = csmGetDrawableVertexUvs(model)[this->id];
+			// turn off stencil write and turn on stencil test
+			const uint32 stencilRef = IUiRenderer::Get()->GetStencilRef();
+			const uint32 stencilMask = 0xFF;
+			const uint32 stencilWriteMask = 0x00;
+			const int32 stencilState = STENC_FUNC(FSS_STENCFUNC_EQUAL)
+				| STENCOP_FAIL(FSS_STENCOP_KEEP) | STENCOP_ZFAIL(FSS_STENCOP_KEEP) | STENCOP_PASS(FSS_STENCOP_KEEP);
+			gEnv->pRenderer->SetStencilState(stencilState, stencilRef, stencilMask, stencilWriteMask);
 
-			//indicies
-			const int icount = csmGetDrawableIndexCounts(model)[this->id];
-
-			//recreate indices if needed
-			if (this->indicesCount != icount) {
-				delete this->indices;
-				this->indicesCount = icount;
-				this->indices = new uint16[this->indicesCount];
+			if (pass == Pass::First) {
+				// first pass, turn on stencil test for drawing children
+				IUiRenderer::Get()->SetBaseState(this->priorBaseState | GS_STENCIL);
+			} else {
+				// second pass, set base state back to what it was before rendering this element
+				IUiRenderer::Get()->SetBaseState(this->priorBaseState);
 			}
-
-			const unsigned short * in = csmGetDrawableIndices(model)[this->id];
-			for (int i = 0; i < this->indicesCount; i++) this->indices[i] = in[i];
-
-			transformUpdate = true; //make sure that we convert the data to lumberyard compatable data
+		} else {
+			// masking is not enabled
+			// remove any color mask or alpha test that we set in pre-render
+			IUiRenderer::Get()->SetBaseState(this->priorBaseState);
 		}
 
-		//update data only when transform has changed.
-		if (transformUpdate) {
-			for (int i = 0; i < this->vertCount; i++) {
-				AZ::Vector3 vec(rawVerts[i].X, rawVerts[i].Y, 1.0f);
-				vec = *this->transform * vec;
-
-				AZ::Vector3 uvTrans = AZ::Vector3(this->rawUVs[i].X, this->rawUVs[i].Y, 0.0f) * *this->uvTransform;
-
-				this->verts[i].xyz = Vec3(vec.GetX(), vec.GetY(), vec.GetZ());
-				this->verts[i].st = Vec2(uvTrans.GetX(), uvTrans.GetY());
-				this->verts[i].color.dcolor = this->packedOpacity;
-			}
+		if (
+			this->modelLoaded &&
+			(
+				(pass == Pass::First && !this->enableMasking) || 
+				(pass == Pass::Second && this->enableMasking)
+			)
+		) this->PostRender();
+	};
+	void Cubism3UIComponent::SetupAfterRenderingChildren(bool& isSecondComponentsPassRequired) {
+		if (enableMasking || drawMaskVisualInFrontOfChildren) {
+			isSecondComponentsPassRequired = true;
 		}
-	}
+	};*/
+	// ~UiRenderControlInterface
 
 	// Cubism3UIBus
 	//pathnames
@@ -746,14 +483,486 @@ namespace Cubism3 {
 	void Cubism3UIComponent::SetMultiThreadLimiter(unsigned int limiter) {
 		if (limiter == 0) limiter = 1;
 		this->threadLimiter = limiter;
-		this->SetThreading(this->m_threading); //recreate the update thread.
+		if (this->m_threading == MULTI) this->SetThreading(this->m_threading); //recreate the update thread if we are multithreading.
 	}
 	// ~Cubism3UIBus
 
-	//Threading stuff
+	void Cubism3UIComponent::LoadObject() {
+		if (!this->m_mocPathname.GetAssetPath().empty()) this->LoadMoc();
+
+	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+		this->LoadAnimation();
+	#endif
+
+		if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
+	}
+	void Cubism3UIComponent::ReleaseObject() {
+		this->FreeTexture();
+
+	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+		this->FreeAnimation();
+	#endif
+
+		this->FreeMoc();
+	}
+
+	void Cubism3UIComponent::LoadMoc() {
+		if (this->m_mocPathname.GetAssetPath().empty()) return;
+
+		//read moc file
+		AZ::IO::HandleType fileHandler;
+		gEnv->pFileIO->Open(this->m_mocPathname.GetAssetPath().c_str(), AZ::IO::OpenMode::ModeRead | AZ::IO::OpenMode::ModeBinary, fileHandler);
+
+		AZ::u64 mocSize;
+		gEnv->pFileIO->Size(fileHandler, mocSize);
+
+		void *mocBuf = CryModuleMemalign(mocSize, csmAlignofMoc); //CryModuleMemalignFree
+		gEnv->pFileIO->Read(fileHandler, mocBuf, mocSize);
+
+		gEnv->pFileIO->Close(fileHandler);
+
+		this->moc = csmReviveMocInPlace(mocBuf, (unsigned int)mocSize);
+
+		//load model
+		unsigned int modelSize = csmGetSizeofModel(this->moc);
+		void * modelBuf = CryModuleMemalign(modelSize, csmAlignofModel); //CryModuleMemalignFree
+
+		this->model = csmInitializeModelInPlace(this->moc, modelBuf, modelSize);
+
+		//get canvas info
+		csmVector2 canvasSize;
+		csmVector2 modelOrigin;
+		csmReadCanvasInfo(this->model, &canvasSize, &modelOrigin, &this->modelAspect);
+		this->modelCanvasSize = AZ::Vector2(canvasSize.X, canvasSize.Y);
+		this->modelOrigin = AZ::Vector2(modelOrigin.X, modelOrigin.Y);
+
+		/*CryLog("Origin: %f, %f", this->modelOrigin.GetX(), this->modelOrigin.GetY());
+		CryLog("Canvas Size: %f, %f", this->modelCanvasSize.GetX(), this->modelCanvasSize.GetY());
+		CryLog("Origin Scaled: %f, %f", this->modelOrigin.GetX()/this->modelCanvasSize.GetX(), this->modelOrigin.GetX()/this->modelCanvasSize.GetY());*/
+
+		//get the parameters of the model
+		const char** paramNames = csmGetParameterIds(this->model);
+
+		for (int i = 0; i < csmGetParameterCount(this->model); i++) {
+			Parameter * p = new Parameter;
+			p->id = i;
+			p->name = AZStd::string(paramNames[i]);
+			p->min = csmGetParameterMinimumValues(this->model)[i];
+			p->max = csmGetParameterMaximumValues(this->model)[i];
+			p->val = &csmGetParameterValues(this->model)[i];
+
+			this->parameters.push_back(p);
+			this->parametersMap[p->name] = p->id;
+		}
+		this->parameters.shrink_to_fit(); //free up unused memory
+
+		//load drawable data
+		const char** drawableNames = csmGetDrawableIds(this->model);
+		const csmFlags* constFlags = csmGetDrawableConstantFlags(this->model);
+		const csmFlags* dynFlags = csmGetDrawableDynamicFlags(this->model);
+		const int* texIndices = csmGetDrawableTextureIndices(this->model);
+		const float* opacities = csmGetDrawableOpacities(this->model);
+		const int* maskCounts = csmGetDrawableMaskCounts(this->model);
+		const int** masks = csmGetDrawableMasks(this->model);
+		const int* vertCount = csmGetDrawableVertexCounts(this->model);
+		const csmVector2** verts = csmGetDrawableVertexPositions(this->model);
+		const csmVector2** uvs = csmGetDrawableVertexUvs(this->model);
+		const int* numIndexes = csmGetDrawableIndexCounts(this->model);
+		const unsigned short** indices = csmGetDrawableIndices(this->model);
+
+		unsigned int drawCount = csmGetDrawableCount(this->model);
+		const int * drawOrder = csmGetDrawableDrawOrders(this->model);
+		const int * renderOrder = csmGetDrawableRenderOrders(this->model);
+
+		float minX = 0.0f, minY = 0.0f, maxX = 0.0f, maxY = 0.0f;
+		
+		for (int i = 0; i < drawCount; ++i) {
+			Drawable * d = new Drawable;
+			d->name = drawableNames[i];
+			d->id = i;
+			d->constFlags = constFlags[i];
+			d->dynFlags = dynFlags[i];
+			d->texIndices = texIndices[i];
+			d->drawOrder = drawOrder[i];
+			d->renderOrder = renderOrder[i];
+			d->opacity = opacities[i];
+			d->packedOpacity = ColorF(1.0f, 1.0f, 1.0f, d->opacity).pack_argb8888();
+			d->maskCount = maskCounts[i];
+
+			d->maskIndices = new uint16[d->maskCount];
+			for (int in = 0; in < d->maskCount; in++) d->maskIndices[in] = masks[i][in];
+
+			d->transform = &this->transform;
+			d->uvTransform = &this->uvTransform;
+
+			d->vertCount = vertCount[i];
+			d->verts = new SVF_P3F_C4B_T2F[d->vertCount];
+			d->rawVerts = verts[i];
+			d->rawUVs = uvs[i];
+
+			for (int v = 0; v < d->vertCount; v++) {
+				d->verts[v].xyz = Vec3(0.0f, 0.0f, 0.0f);
+				d->verts[v].st = Vec2(0.0f, 0.0f);
+				d->verts[v].color.dcolor = d->packedOpacity;
+
+				if (d->rawVerts[v].X < minX) minX = d->rawVerts[v].X;
+				if (d->rawVerts[v].Y < minY) minY = d->rawVerts[v].Y;
+
+				if (d->rawVerts[v].X > maxX) maxX = d->rawVerts[v].X;
+				if (d->rawVerts[v].Y > maxY) maxY = d->rawVerts[v].Y;
+			}
+			
+			d->indicesCount = numIndexes[i];
+			d->indices = new uint16[d->indicesCount];
+
+			for (int in = 0; in < d->indicesCount; in++) d->indices[in] = indices[i][in];
+
+			d->visible = d->dynFlags & csmIsVisible;
+
+			this->drawables.push_back(d);
+		}
+		this->drawables.shrink_to_fit(); //free up unused memory
+
+		this->modelSize.SetX(abs(minX) + abs(maxX));
+		this->modelSize.SetY(abs(minY) + abs(maxY));
+
+		std::sort(this->drawables.begin(), this->drawables.end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; }); //sort the drawables by render order
+
+		this->threadMutex.Lock();
+		//threading
+		//create new update thread
+		if (this->tJob) {
+			this->tJob->Cancel();
+			this->tJob->WaitTillReady();
+			delete this->tJob;
+		}
+
+		switch (this->m_threading) {
+		case NONE:
+			this->tJob = nullptr;
+			break;
+		case SINGLE:
+			this->tJob = new DrawableSingleThread(this->drawables);
+			this->tJob->SetModel(this->model);
+			break;
+		case MULTI:
+			this->tJob = new DrawableMultiThread(this->drawables, this->threadLimiter);
+			this->tJob->SetModel(this->model);
+			break;
+		}
+
+		if (this->tJob) this->tJob->Start(); //start the update thread
+		this->threadMutex.Unlock();
+		this->modelLoaded = true;
+
+		this->prevViewport = AZ::Matrix4x4::CreateIdentity();
+	}
+	void Cubism3UIComponent::FreeMoc() {
+		this->modelLoaded = false;
+		//delete the drawable update thread
+		this->threadMutex.Lock();
+		if (this->tJob) {
+			this->tJob->Cancel();
+			this->tJob->WaitTillReady();
+			delete this->tJob;
+			this->tJob = nullptr;
+		}
+		this->threadMutex.Unlock();
+
+		if (this->drawables.size() != 0) {
+			for (Drawable * d : this->drawables) {
+				delete d->verts; //delete the vector data
+				delete d->indices; //delete the indices data
+				delete d->maskIndices; //delete the mask indices
+			}
+			this->drawables.clear(); //clear the drawables vector
+		}
+
+		if (this->parameters.size() != 0) {
+			this->parameters.clear(); //clear the parameters vector
+			this->parametersMap.clear(); //clear the parameters vector
+		}
+
+		if (this->model) CryModuleMemalignFree(this->model); //free the model
+		if (this->moc) CryModuleMemalignFree(this->moc); //free the moc
+
+		this->model = nullptr;
+		this->moc = nullptr;
+	}
+
+	void Cubism3UIComponent::LoadTexture() {
+		if (this->m_imagePathname.GetAssetPath().empty()) return;
+		//load the texture
+		this->texture = gEnv->pSystem->GetIRenderer()->EF_LoadTexture(this->m_imagePathname.GetAssetPath().c_str(), FT_DONT_STREAM);
+		this->texture->AddRef(); //Release
+	}
+	void Cubism3UIComponent::FreeTexture() {
+		SAFE_RELEASE(texture);
+	}
+
+	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+	void Cubism3UIComponent::LoadAnimation() {
+		//load animations
+		if (this->m_animationPathnames.size() != 0) {
+			for (AzFramework::SimpleAssetReference<MotionAsset> asset : this->m_animationPathnames) {
+				if (asset.GetAssetPath().empty()) continue;
+
+				AZ::IO::HandleType animFileHandler;
+				gEnv->pFileIO->Open(asset.GetAssetPath().c_str(), AZ::IO::OpenMode::ModeBinary, animFileHandler);
+
+				AZ::u64 motionJsonSize;
+				gEnv->pFileIO->Size(animFileHandler, motionJsonSize);
+
+				char * motionJson = (char *)malloc(motionJsonSize);
+				gEnv->pFileIO->Read(animFileHandler, motionJson, motionJsonSize);
+
+				gEnv->pFileIO->Close(animFileHandler);
+
+				AnimationLayer* layer = new AnimationLayer; //delete
+				layer->Blend = csmOverrideFloatBlendFunction;
+				layer->Weight = 1.0f;
+				layer->enabled = false;
+				csmResetAnimationState(&layer->State);
+
+				unsigned int animSize = csmGetDeserializedSizeofAnimation(motionJson);
+
+				void * animbuff = malloc(animSize); //free
+				layer->Animation = csmDeserializeAnimationInPlace(motionJson, animbuff, animSize);
+
+				free(motionJson);
+
+				this->animations.push_back(layer);
+			}
+			this->animations.shrink_to_fit();
+		}
+
+		//load sink
+		unsigned int sinkSize = csmGetSizeofFloatSink(this->model);
+		void *sinkBuf = malloc(sinkSize); //free
+		this->sink = csmInitializeFloatSinkInPlace(this->model, sinkBuf, sinkSize);
+	}
+	void Cubism3UIComponent::FreeAnimation() {
+		if (this->sink) free(this->sink); //free the float sink
+
+		if (this->animations.size() != 0) {
+			for (AnimationLayer* layer : this->animations) free(layer->Animation); //free each animation
+			this->animations.clear(); //clear the animations vector
+		}
+
+		this->sink = nullptr;
+	}
+	#endif
+
+	void Cubism3UIComponent::OnMocFileChange() {
+		this->FreeMoc();
+		if (!this->m_mocPathname.GetAssetPath().empty()) this->LoadMoc();
+		this->prevViewport = AZ::Matrix4x4::CreateIdentity();
+	}
+	void Cubism3UIComponent::OnImageFileChange() {
+		this->FreeTexture();
+		if (!this->m_imagePathname.GetAssetPath().empty()) this->LoadTexture();
+	}
 	void Cubism3UIComponent::OnThreadingChange() {
 		this->SetThreading(this->m_threading);
 	}
+	void Cubism3UIComponent::OnFillChange() {
+		this->prevViewport = AZ::Matrix4x4::CreateIdentity();
+	}
+
+	void Cubism3UIComponent::PreRender() {
+		//threading
+		//if we are threading the drawable updates
+		if (this->m_threading != NONE && this->tJob) this->tJob->WaitTillReady(); //wait until the update thread is ready.
+
+		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+		if (this->animations.size() != 0) {
+			for (AnimationLayer* layer : this->animations) {
+				if (layer->enabled) {
+					csmTickAnimationState(&layer->State, gEnv->pTimer->GetFrameTime());
+					csmEvaluateAnimation(
+						layer->Animation,
+						&layer->State,
+						layer->Blend,
+						layer->Weight,
+						this->sink
+					);
+				}
+			}
+
+			csmFlushFloatSink(this->sink, this->model, 0, 0);
+		}
+		#endif
+
+		if (this->m_threading == NONE && !this->tJob)
+			csmUpdateModel(this->model);
+
+		UiTransform2dInterface::Anchors anchors;
+		EBUS_EVENT_ID_RESULT(anchors, GetEntityId(), UiTransform2dBus, GetAnchors);
+		UiTransform2dInterface::Offsets offsets;
+		EBUS_EVENT_ID_RESULT(offsets, GetEntityId(), UiTransform2dBus, GetOffsets);
+		AZ::Matrix4x4 viewport;
+		EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetTransformToViewport, viewport);
+
+		//update transform as nessessary.
+		this->transformUpdated = false;
+		if (this->prevAnchors != anchors || this->prevOffsets != offsets || this->prevViewport != viewport) {
+			this->prevViewport = viewport;
+			this->prevAnchors = anchors;
+			this->prevOffsets = offsets;
+			this->transformUpdated = true;
+
+			UiTransformInterface::Rect rect;
+			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetCanvasSpaceRectNoScaleRotate, rect);
+
+			UiTransformInterface::RectPoints points;
+			EBUS_EVENT_ID(GetEntityId(), UiTransformBus, GetCanvasSpacePointsNoScaleRotate, points);
+
+			this->transform = viewport *
+				AZ::Matrix4x4::CreateTranslation( //translate the object
+					AZ::Vector3(
+						points.pt[UiTransformInterface::RectPoints::Corner_TopLeft].GetX() + (rect.GetWidth() / 2),
+						points.pt[UiTransformInterface::RectPoints::Corner_TopLeft].GetY() + (rect.GetHeight() / 2),
+						0.0f
+					)
+				);
+
+			float scaleX = 1.0f;
+			float scaleY = 1.0f;
+
+			if (this->fill) {
+				scaleX = rect.GetWidth() / this->modelSize.GetX();
+				scaleY = rect.GetHeight() / this->modelSize.GetY();
+			} else {
+				//float rectAspect = rect.GetWidth() / rect.GetHeight();
+				float modelSizeAspect = this->modelSize.GetX() / this->modelSize.GetY();
+
+				scaleX = (rect.GetHeight() * modelSizeAspect) / this->modelSize.GetX();
+				scaleY = rect.GetHeight() / this->modelSize.GetY();
+			}
+
+			//scale the object
+			this->transform.MultiplyByScale(AZ::Vector3(scaleX, -scaleY, 1.0f));
+		}
+	}
+	void Cubism3UIComponent::PostRender() {
+		//threading
+		if (this->m_threading != NONE && this->tJob) { //if update is threaded
+			this->tJob->SetTransformUpdate(this->transformUpdated); //notify that the transform has updated or not //TRANSFORM
+			this->tJob->Notify(); //wake up the update thread.
+		} else {
+			csmResetDrawableDynamicFlags(this->model);
+			if (this->renderOrderChanged)
+				std::sort(
+					this->drawables.begin(),
+					this->drawables.end(),
+					[](Drawable * a, Drawable * b) -> bool {
+						return a->renderOrder < b->renderOrder;
+					}
+			);
+		}
+	}
+
+	void Cubism3UIComponent::EnableMasking() {
+		this->priorBaseState = IUiRenderer::Get()->GetBaseState();
+
+		int alphaTest = 0;
+		if (this->useAlphaTest) alphaTest = GS_ALPHATEST_GREATER;
+
+		int colorMask = GS_COLMASK_NONE;
+
+		if (this->enableMasking) {
+			// set up for stencil write
+			const uint32 stencilRef = IUiRenderer::Get()->GetStencilRef();
+			const uint32 stencilMask = 0xFF;
+			const uint32 stencilWriteMask = 0xFF;
+			const int32 stencilState = STENC_FUNC(FSS_STENCFUNC_EQUAL) | STENCOP_FAIL(FSS_STENCOP_KEEP) | STENCOP_ZFAIL(FSS_STENCOP_KEEP);
+			gEnv->pRenderer->SetStencilState(stencilState, stencilRef, stencilMask, stencilWriteMask);
+
+			IUiRenderer::Get()->SetBaseState(this->priorBaseState | GS_STENCIL | alphaTest | colorMask);
+		} else {
+			if (colorMask || alphaTest) {
+				IUiRenderer::Get()->SetBaseState(this->priorBaseState | colorMask | alphaTest);
+			}
+		}
+	}
+	void Cubism3UIComponent::DisableMasking() {
+		if (this->enableMasking) {
+			// turn off stencil write and turn on stencil test
+			const uint32 stencilRef = IUiRenderer::Get()->GetStencilRef();
+			const uint32 stencilMask = 0xFF;
+			const uint32 stencilWriteMask = 0x00;
+			const int32 stencilState = STENC_FUNC(FSS_STENCFUNC_EQUAL) | STENCOP_FAIL(FSS_STENCOP_KEEP) | STENCOP_ZFAIL(FSS_STENCOP_KEEP) | STENCOP_PASS(FSS_STENCOP_KEEP);
+			gEnv->pRenderer->SetStencilState(stencilState, stencilRef, stencilMask, stencilWriteMask);
+
+			IUiRenderer::Get()->SetBaseState(this->priorBaseState);
+		} else {
+			IUiRenderer::Get()->SetBaseState(this->priorBaseState);
+		}
+	}
+
+	void Cubism3UIComponent::Drawable::update(csmModel* model, bool transformUpdate, bool &renderOrderChanged) {
+		this->dynFlags = csmGetDrawableDynamicFlags(model)[this->id];
+
+		if (this->dynFlags & csmVisibilityDidChange) this->visible = this->dynFlags & csmIsVisible;
+
+		if (this->dynFlags & csmOpacityDidChange) {
+			this->opacity = csmGetDrawableOpacities(model)[this->id];
+			this->packedOpacity = ColorF(1.0f, 1.0f, 1.0f, this->opacity).pack_argb8888();
+			for (int i = 0; i < this->vertCount; i++) this->verts[i].color.dcolor = this->packedOpacity;
+		}
+
+		if (this->dynFlags & csmDrawOrderDidChange) this->drawOrder = csmGetDrawableDrawOrders(model)[this->id];
+		if (this->dynFlags & csmRenderOrderDidChange) {
+			this->renderOrder = csmGetDrawableRenderOrders(model)[this->id];
+			renderOrderChanged = true;
+		}
+
+		if (this->dynFlags & csmVertexPositionsDidChange) {
+			//vertexes
+			const int vertCount = csmGetDrawableVertexCounts(model)[this->id];
+
+			//recreate buffer if needed
+			if (vertCount != this->vertCount) {
+				delete this->verts;
+				this->vertCount = vertCount;
+				this->verts = new SVF_P3F_C4B_T2F[this->vertCount];
+			}
+
+			this->rawVerts = csmGetDrawableVertexPositions(model)[this->id];
+			this->rawUVs = csmGetDrawableVertexUvs(model)[this->id];
+
+			//indicies
+			const int icount = csmGetDrawableIndexCounts(model)[this->id];
+
+			//recreate indices if needed
+			if (this->indicesCount != icount) {
+				delete this->indices;
+				this->indicesCount = icount;
+				this->indices = new uint16[this->indicesCount];
+			}
+
+			const unsigned short * in = csmGetDrawableIndices(model)[this->id];
+			for (int i = 0; i < this->indicesCount; i++) this->indices[i] = in[i];
+
+			transformUpdate = true; //make sure that we convert the data to lumberyard compatable data
+		}
+
+		//update data only when transform has changed.
+		if (transformUpdate) {
+			for (int i = 0; i < this->vertCount; i++) {
+				AZ::Vector3 vec(rawVerts[i].X, rawVerts[i].Y, 1.0f);
+				vec = *this->transform * vec;
+
+				AZ::Vector3 uvTrans = AZ::Vector3(this->rawUVs[i].X, this->rawUVs[i].Y, 0.0f) * *this->uvTransform;
+
+				this->verts[i].xyz = Vec3(vec.GetX(), vec.GetY(), vec.GetZ());
+				this->verts[i].st = Vec2(uvTrans.GetX(), uvTrans.GetY());
+				this->verts[i].color.dcolor = this->packedOpacity;
+			}
+		}
+	}
+
+	//Threading stuff
 
 	///base thread
 	Cubism3UIComponent::DrawableThreadBase::DrawableThreadBase(AZStd::vector<Drawable*> &drawables) {
@@ -784,7 +993,16 @@ namespace Cubism3 {
 
 			for (Drawable* d : *m_drawables) d->update(this->m_model, this->m_transformUpdate, this->m_renderOrderChanged);
 
-			if (this->m_renderOrderChanged) std::sort(this->m_drawables->begin(), this->m_drawables->end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; });
+			if (this->m_renderOrderChanged)
+				std::sort(
+					this->m_drawables->begin(),
+					this->m_drawables->end(),
+					[](Drawable * a, Drawable * b) -> bool {
+						return a->renderOrder < b->renderOrder;
+					}
+			);
+
+			csmResetDrawableDynamicFlags(this->m_model);
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
@@ -927,6 +1145,8 @@ namespace Cubism3 {
 			for (int i = 0; i < numThreads; i++) this->m_threads[i]->WaitTillReady(); //wait until the worker threads are done
 
 			if (this->m_renderOrderChanged) std::sort(this->m_drawables->begin(), this->m_drawables->end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; });
+
+			csmResetDrawableDynamicFlags(this->m_model);
 
 			this->mutex.Unlock();
 		}
