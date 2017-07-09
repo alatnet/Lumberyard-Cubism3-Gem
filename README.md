@@ -6,7 +6,7 @@ To compile the gem, it requires that you have downloaded Cubism3 SDK from [live2
 Place the SDK\'s develop and release library files in "3rdParty" folder and the SDK\'s include files in "Code\\Source".  
 
 ## How to have asset listing
-In order to have the editor list Cubism3 assets you will need to add the following to your "Amazon/Lumberyard\<version\>/dev/AssetProcessorPlatformConfig.ini":  
+In order to have the editor list Cubism3 assets you will need to add the following to your "Amazon/Lumberyard/\<version\>/dev/AssetProcessorPlatformConfig.ini":  
 ```Text
 ; Copy Moc Files
 [RC Cubism3]
