@@ -18,4 +18,5 @@ productAssetType={7DB33C8B-8498-404C-A301-B0269AE60388}
 [RC Cubism3_Model3]
 glob=*.model3.json
 params=copy
-productAssetType={A679F1C0-60A1-48FB-8107-A68195D76CF2}```
+productAssetType={A679F1C0-60A1-48FB-8107-A68195D76CF2}
+```
