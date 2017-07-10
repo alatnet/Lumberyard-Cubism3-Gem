@@ -18,6 +18,7 @@ namespace Cubism3
         {
 			AzFramework::SimpleAssetReference<MocAsset>::Register(*serialize);
 			AzFramework::SimpleAssetReference<Cubism3Asset>::Register(*serialize);
+			AzFramework::SimpleAssetReference<Cubism3::MotionAsset>::Register(*serialize);
 
             serialize->Class<Cubism3SystemComponent, AZ::Component>()
                 ->Version(0)

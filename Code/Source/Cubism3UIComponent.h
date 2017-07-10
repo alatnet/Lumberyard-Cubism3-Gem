@@ -1,5 +1,7 @@
 #pragma once
 
+#include <IRenderer.h>
+
 #include <LyShine/Bus/UiRenderBus.h>
 #include <LyShine/Bus/UiTransformBus.h>
 #include <Cry_Color.h>
@@ -28,11 +30,20 @@
 
 #include "Cubism3Assets.h"
 
+#ifdef ENABLE_CUBISM3_DEBUG
+	#ifdef ENABLE_CUBISM3_DEBUGLOG
+		#define CLOG(...) CryLog(__VA_ARGS__)
+	#else
+		#define CLOG(...)
+	#endif
+#else
+	#define CLOG(...)
+#endif
+
 namespace Cubism3 {
 	class Cubism3UIComponent
 		: public AZ::Component
 		, public UiRenderBus::Handler
-		//, public UiRenderControlBus::Handler
 		, public Cubism3UIBus::Handler
 	{
 
@@ -74,13 +85,6 @@ namespace Cubism3 {
 		// UiRenderInterface
 		void Render() override;
 		// ~UiRenderInterface
-
-	public:
-		// UiRenderControlInterface
-		/*void SetupBeforeRenderingComponents(Pass pass) override;
-		void SetupAfterRenderingComponents(Pass pass) override;
-		void SetupAfterRenderingChildren(bool& isSecondComponentsPassRequired) override;*/
-		// ~UiRenderControlInterface
 
 	public:
 		// Cubism3UIBus
@@ -268,7 +272,9 @@ namespace Cubism3 {
 
 		bool renderOrderChanged;
 
+		#ifdef ENABLE_CUBISM3_DEBUG
 		bool wireframe;
+		#endif
 
 	private: //threading stuff
 		Cubism3UIInterface::Threading m_threading;
@@ -355,7 +361,7 @@ namespace Cubism3 {
 		private:
 			class SubThread : public CryThread<CryRunnable> {
 			public:
-				SubThread(DrawableMultiThread * dmt) : m_dmt(dmt) {}
+				SubThread(DrawableMultiThread * dmt) : m_dmt(dmt), m_canceled(false) {}
 			public:
 				void Cancel();
 				void Run();
@@ -387,5 +393,38 @@ namespace Cubism3 {
 		//bool maskInteraction;
 		int priorBaseState;
 		//Pass currPass;
+
+	#ifdef ENABLE_CUBISM3_DEBUG
+	private: //stencil stuff
+		enum SFunc {
+			FDISABLE = -1,
+			ALWAYS = FSS_STENCFUNC_ALWAYS,
+			NEVER = FSS_STENCFUNC_NEVER,
+			LESS = FSS_STENCFUNC_LESS,
+			LEQUAL = FSS_STENCFUNC_LEQUAL,
+			GREATER = FSS_STENCFUNC_GREATER,
+			GEQUAL = FSS_STENCFUNC_GEQUAL,
+			EQUAL = FSS_STENCFUNC_EQUAL,
+			NOTEQUAL = FSS_STENCFUNC_NOTEQUAL,
+			MASK = FSS_STENCFUNC_MASK
+		};
+		SFunc stencilFunc, stencilCCWFunc;
+		bool sTwoSided;
+
+		enum SOp {
+			ODISABLE = -1,
+			KEEP = FSS_STENCOP_KEEP,
+			REPLACE = FSS_STENCOP_REPLACE,
+			INCR = FSS_STENCOP_INCR,
+			DECR = FSS_STENCOP_DECR,
+			ZERO = FSS_STENCOP_ZERO,
+			INCR_WRAP = FSS_STENCOP_INCR_WRAP,
+			DECR_WRAP = FSS_STENCOP_DECR_WRAP,
+			INVERT = FSS_STENCOP_INVERT
+		};
+
+		SOp opFail, opZFail, opPass;
+		SOp opCCWFail, opCCWZFail, opCCWPass;
+	#endif
 	};
 }

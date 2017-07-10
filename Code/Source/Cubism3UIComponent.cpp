@@ -6,8 +6,6 @@
 #include <AzCore/RTTI/BehaviorContext.h>
 #include <AzCore/Component/ComponentApplicationBus.h>
 
-#include <IRenderer.h>
-
 #include <LyShine/IDraw2d.h>
 #include <LyShine/UiSerializeHelpers.h>
 #include <LyShine/Bus/UiElementBus.h>
@@ -49,7 +47,9 @@ namespace Cubism3 {
 
 		this->threadLimiter = CUBISM3_MULTITHREAD_LIMITER;
 
+		#ifdef ENABLE_CUBISM3_DEBUG
 		this->wireframe = false;
+		#endif
 
 		this->modelSize = AZ::Vector2(0.0f, 0.0f);
 		this->fill = false;
@@ -60,6 +60,21 @@ namespace Cubism3 {
 		this->useAlphaTest = false;
 
 		this->lType = Single;
+
+		#ifdef ENABLE_CUBISM3_DEBUG
+		//stencil stuff
+		this->stencilFunc = SFunc::EQUAL;
+		this->stencilCCWFunc = SFunc::FDISABLE;
+		this->sTwoSided = false;
+
+		this->opFail = SOp::KEEP;
+		this->opZFail = SOp::KEEP;
+		this->opPass = SOp::ODISABLE;
+
+		this->opCCWFail = SOp::ODISABLE;
+		this->opCCWZFail = SOp::ODISABLE;
+		this->opCCWPass = SOp::ODISABLE;
+		#endif
 	}
 
 	Cubism3UIComponent::~Cubism3UIComponent() {
@@ -86,6 +101,7 @@ namespace Cubism3 {
 		AZ::SerializeContext* serializeContext = azrtti_cast<AZ::SerializeContext*>(context);
 
 		if (serializeContext) {
+			#define QFIELD(x) ->Field(#x,&Cubism3UIComponent::##x##) //quick field
 			serializeContext->Class<Cubism3UIComponent, AZ::Component>()
 				->Version(1)
 				->Field("LoadType", &Cubism3UIComponent::lType)
@@ -93,17 +109,31 @@ namespace Cubism3 {
 				->Field("ImageFile", &Cubism3UIComponent::m_imagePathname)
 				->Field("JSONFile", &Cubism3UIComponent::m_jsonPathname)
 				->Field("Fill", &Cubism3UIComponent::fill)
-				->Field("Wireframe", &Cubism3UIComponent::wireframe)
-				->Field("Threading", &Cubism3UIComponent::m_threading)
 				->Field("Masking", &Cubism3UIComponent::enableMasking)
 				//->Field("Masking_DrawBehindChildren", &Cubism3UIComponent::drawMaskVisualBehindChildren)
 				//->Field("Masking_DrawInFrontChildren", &Cubism3UIComponent::drawMaskVisualInFrontOfChildren)
 				->Field("Masking_Alpha", &Cubism3UIComponent::useAlphaTest)
 				//->Field("RenderType", &Cubism3UIComponent::rType)
-			#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+				#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 				->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames)
-			#endif
+				#endif
+
+				#ifdef ENABLE_CUBISM3_DEBUG
+				->Field("Wireframe", &Cubism3UIComponent::wireframe)
+				->Field("Threading", &Cubism3UIComponent::m_threading)
+				//-Field("", &Cubism3UIComponent::)
+				QFIELD(stencilFunc)
+				QFIELD(stencilCCWFunc)
+				QFIELD(sTwoSided)
+				QFIELD(opFail)
+				QFIELD(opZFail)
+				QFIELD(opPass)
+				QFIELD(opCCWFail)
+				QFIELD(opCCWZFail)
+				QFIELD(opCCWPass)
+				#endif
 				;
+			#undef QFIELD
 
 			AZ::EditContext* ec = serializeContext->GetEditContext();
 			if (ec) {
@@ -135,6 +165,13 @@ namespace Cubism3 {
 				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::fill, "Fill", "Fill the model to the element's dimentions")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnFillChange);
 
+				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::enableMasking, "Enable masking",
+					"Enable masking usage of the Cubism3 model.");
+
+				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::useAlphaTest, "Use alpha test",
+					"Check this box to use the alpha channel in the mask visual's texture to define the mask.");
+
+				#ifdef ENABLE_CUBISM3_DEBUG
 				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::wireframe, "Wireframe (Debug)", "Wireframe Mode");
 
 				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::m_threading, "Threading (Debug)", "Threading Mode")
@@ -143,18 +180,112 @@ namespace Cubism3 {
 					->EnumAttribute(Cubism3UIInterface::Threading::SINGLE, "Single")
 					->EnumAttribute(Cubism3UIInterface::Threading::MULTI, "Multi");
 
-				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::enableMasking, "Enable masking",
-					"Enable masking usage of the Cubism3 model.");
+				//Debug Stencil
+				#define QENUMSFUNC(x) ->EnumAttribute(Cubism3UIComponent::SFunc::##x##, #x)
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::stencilFunc, "Stencil Func (Debug)", "Stencil Function")
+					->EnumAttribute(Cubism3UIComponent::SFunc::FDISABLE, "DISABLE")
+					QENUMSFUNC(ALWAYS)
+					QENUMSFUNC(NEVER)
+					QENUMSFUNC(LESS)
+					QENUMSFUNC(LEQUAL)
+					QENUMSFUNC(GREATER)
+					QENUMSFUNC(GEQUAL)
+					QENUMSFUNC(EQUAL)
+					QENUMSFUNC(NOTEQUAL)
+					QENUMSFUNC(MASK)
+					;
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::stencilCCWFunc, "Stencil CCW Func (Debug)", "Stencil CCW Function")
+					->EnumAttribute(Cubism3UIComponent::SFunc::FDISABLE, "DISABLE")
+					QENUMSFUNC(ALWAYS)
+					QENUMSFUNC(NEVER)
+					QENUMSFUNC(LESS)
+					QENUMSFUNC(LEQUAL)
+					QENUMSFUNC(GREATER)
+					QENUMSFUNC(GEQUAL)
+					QENUMSFUNC(EQUAL)
+					QENUMSFUNC(NOTEQUAL)
+					QENUMSFUNC(MASK)
+					;
+				#undef QENUMSFUNC
 
-				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::useAlphaTest, "Use alpha test",
-					"Check this box to use the alpha channel in the mask visual's texture to define the mask.");
+				#define QENUMSOP(x) ->EnumAttribute(Cubism3UIComponent::SOp::##x##, #x)
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opFail, "Stencil Fail Op (Debug)", "Stencil Fail Operation")
+					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+					QENUMSOP(KEEP)
+					QENUMSOP(REPLACE)
+					QENUMSOP(INCR)
+					QENUMSOP(DECR)
+					QENUMSOP(ZERO)
+					QENUMSOP(INCR_WRAP)
+					QENUMSOP(DECR_WRAP)
+					QENUMSOP(INVERT)
+					;
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opZFail, "Stencil ZFail Op (Debug)", "Stencil ZFail Operation")
+					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+					QENUMSOP(KEEP)
+					QENUMSOP(REPLACE)
+					QENUMSOP(INCR)
+					QENUMSOP(DECR)
+					QENUMSOP(ZERO)
+					QENUMSOP(INCR_WRAP)
+					QENUMSOP(DECR_WRAP)
+					QENUMSOP(INVERT)
+					;
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opPass, "Stencil Pass Op (Debug)", "Stencil Pass Operation")
+					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+					QENUMSOP(KEEP)
+					QENUMSOP(REPLACE)
+					QENUMSOP(INCR)
+					QENUMSOP(DECR)
+					QENUMSOP(ZERO)
+					QENUMSOP(INCR_WRAP)
+					QENUMSOP(DECR_WRAP)
+					QENUMSOP(INVERT)
+					;
 
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWFail, "Stencil CCW Fail Op (Debug)", "Stencil CCW Fail Operation")
+					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+					QENUMSOP(KEEP)
+					QENUMSOP(REPLACE)
+					QENUMSOP(INCR)
+					QENUMSOP(DECR)
+					QENUMSOP(ZERO)
+					QENUMSOP(INCR_WRAP)
+					QENUMSOP(DECR_WRAP)
+					QENUMSOP(INVERT)
+					;
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWZFail, "Stencil CCW ZFail Op (Debug)", "Stencil CCW ZFail Operation")
+					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+					QENUMSOP(KEEP)
+					QENUMSOP(REPLACE)
+					QENUMSOP(INCR)
+					QENUMSOP(DECR)
+					QENUMSOP(ZERO)
+					QENUMSOP(INCR_WRAP)
+					QENUMSOP(DECR_WRAP)
+					QENUMSOP(INVERT)
+					;
+				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWPass, "Stencil CCW Pass Op (Debug)", "Stencil CCW Pass Operation")
+					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+					QENUMSOP(KEEP)
+					QENUMSOP(REPLACE)
+					QENUMSOP(INCR)
+					QENUMSOP(DECR)
+					QENUMSOP(ZERO)
+					QENUMSOP(INCR_WRAP)
+					QENUMSOP(DECR_WRAP)
+					QENUMSOP(INVERT)
+					;
+				#undef QENUMSOP
+				#endif
 			}
 		}
 
 		AZ::BehaviorContext* behaviorContext = azrtti_cast<AZ::BehaviorContext*>(context);
 		if (behaviorContext) {
 			behaviorContext->Class<Cubism3UIComponent>("Cubisim3UI")
+				->Enum<Cubism3UIInterface::LoadType::Single>("ltSingle")
+				->Enum<Cubism3UIInterface::LoadType::JSON>("ltJSON")
 				->Enum<Cubism3UIInterface::Threading::NONE>("tNone")
 				->Enum<Cubism3UIInterface::Threading::SINGLE>("tSingle")
 				->Enum<Cubism3UIInterface::Threading::MULTI>("tMulti")
@@ -162,11 +293,17 @@ namespace Cubism3 {
 
 			#define EBUS_METHOD(name) ->Event(#name, &Cubism3UIBus::Events::##name##)
 			behaviorContext->EBus<Cubism3UIBus>("Cubism3UIBus")
+				//load type
+				EBUS_METHOD(SetLoadType)
+				EBUS_METHOD(GetLoadType)
 				//pathnames
 				EBUS_METHOD(SetMocPathname)
 				EBUS_METHOD(SetTexturePathname)
 				EBUS_METHOD(GetMocPathname)
 				EBUS_METHOD(GetTexturePathname)
+				//JSON pathname
+				EBUS_METHOD(SetJSONPathname)
+				EBUS_METHOD(GetJSONPathname)
 				//parameters
 				EBUS_METHOD(GetParameterCount)
 				EBUS_METHOD(GetParameterIdByName)
@@ -218,7 +355,7 @@ namespace Cubism3 {
 								else if (mask->constFlags & csmBlendMultiplicative) flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
 
 								if (this->lType==Single) renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
-								else renderer->SetTexture(this->textures[mask->texId] ? (mask->texId > this->textures.size() ? renderer->GetWhiteTextureId() : this->textures[mask->texId]->GetTextureID()) : renderer->GetWhiteTextureId());
+								else renderer->SetTexture((mask->texId >= this->textures.size()) ? renderer->GetWhiteTextureId() : (this->textures[mask->texId] ? this->textures[mask->texId]->GetTextureID() : renderer->GetWhiteTextureId()));
 
 								renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
 								renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
@@ -233,16 +370,21 @@ namespace Cubism3 {
 					if (d->constFlags & csmBlendAdditive) flags = GS_BLSRC_SRCALPHA | GS_BLDST_ONE;
 					else if (d->constFlags & csmBlendMultiplicative) flags = GS_BLDST_ONE | GS_BLDST_ONEMINUSSRCALPHA;
 
+					#ifdef ENABLE_CUBISM3_DEBUG
 					if (this->wireframe) renderer->PushWireframeMode(R_WIREFRAME_MODE);
+					#endif
 					(d->constFlags & csmIsDoubleSided) ? renderer->SetCullMode(R_CULL_DISABLE) : renderer->SetCullMode(R_CULL_BACK);
 
 					if (this->lType == Single) renderer->SetTexture(this->texture ? this->texture->GetTextureID() : renderer->GetWhiteTextureId());
-					else renderer->SetTexture(this->textures[d->texId] ? (d->texId > this->textures.size() ? renderer->GetWhiteTextureId() : this->textures[d->texId]->GetTextureID()) : renderer->GetWhiteTextureId());
+					else renderer->SetTexture((d->texId >= this->textures.size()) ? renderer->GetWhiteTextureId() : (this->textures[d->texId] ? this->textures[d->texId]->GetTextureID() : renderer->GetWhiteTextureId()));
 
 					renderer->SetState(flags | IUiRenderer::Get()->GetBaseState());
 					renderer->SetColorOp(eCO_MODULATE, eCO_MODULATE, DEF_TEXARG0, DEF_TEXARG0);
 					renderer->DrawDynVB(d->verts, d->indices, d->vertCount, d->indicesCount, prtTriangleList);
+
+					#ifdef ENABLE_CUBISM3_DEBUG
 					if (this->wireframe) renderer->PopWireframeMode();
+					#endif
 				}
 			}
 
@@ -311,99 +453,7 @@ namespace Cubism3 {
 	/// draw drawable
 	///end
 	// ~UiRenderInterface
-
-	// UiRenderControlInterface
-	/*void Cubism3UIComponent::SetupBeforeRenderingComponents(Pass pass) {
-		this->currPass = pass;
-		if (this->modelLoaded && pass == Pass::First) this->PreRender();
-
-		//enable masking
-		if (pass == Pass::First)
-			this->priorBaseState = IUiRenderer::Get()->GetBaseState();
-
-		int alphaTest = 0;
-		if (this->useAlphaTest) alphaTest = GS_ALPHATEST_GREATER;
-
-		int colorMask = GS_COLMASK_NONE;
-		if (
-			(this->drawMaskVisualBehindChildren && pass == Pass::First) ||
-			(this->drawMaskVisualInFrontOfChildren && pass == Pass::Second)
-		) {
-			colorMask = 0;
-		}
-
-		if (this->enableMasking) {
-			int passOp = 0;
-			if (pass == Pass::First) {
-				passOp = STENCOP_PASS(FSS_STENCOP_INCR);
-				gEnv->pRenderer->PushProfileMarker(cubism3_maskIncProfileMarker);
-			} else {
-				passOp = STENCOP_PASS(FSS_STENCOP_DECR);
-				gEnv->pRenderer->PushProfileMarker(cubism3_maskDecProfileMarker);
-			}
-
-			// set up for stencil write
-			const uint32 stencilRef = IUiRenderer::Get()->GetStencilRef();
-			const uint32 stencilMask = 0xFF;
-			const uint32 stencilWriteMask = 0xFF;
-			const int32 stencilState = STENC_FUNC(FSS_STENCFUNC_EQUAL)
-				| STENCOP_FAIL(FSS_STENCOP_KEEP) | STENCOP_ZFAIL(FSS_STENCOP_KEEP) | passOp;
-			gEnv->pRenderer->SetStencilState(stencilState, stencilRef, stencilMask, stencilWriteMask);
-
-			IUiRenderer::Get()->SetBaseState(this->priorBaseState | GS_STENCIL | alphaTest | colorMask);
-		} else {
-			//if (colorMask || alphaTest) {
-				IUiRenderer::Get()->SetBaseState(this->priorBaseState | colorMask | alphaTest);
-			//}
-		}
-	};*/
-	/*void Cubism3UIComponent::SetupAfterRenderingComponents(Pass pass) {
-		//disable masking
-		if (this->enableMasking) {
-			if (pass == Pass::First) {
-				IUiRenderer::Get()->IncrementStencilRef();
-				gEnv->pRenderer->PopProfileMarker(cubism3_maskIncProfileMarker);
-			} else {
-				IUiRenderer::Get()->DecrementStencilRef();
-				gEnv->pRenderer->PopProfileMarker(cubism3_maskDecProfileMarker);
-			}
-
-			// turn off stencil write and turn on stencil test
-			const uint32 stencilRef = IUiRenderer::Get()->GetStencilRef();
-			const uint32 stencilMask = 0xFF;
-			const uint32 stencilWriteMask = 0x00;
-			const int32 stencilState = STENC_FUNC(FSS_STENCFUNC_EQUAL)
-				| STENCOP_FAIL(FSS_STENCOP_KEEP) | STENCOP_ZFAIL(FSS_STENCOP_KEEP) | STENCOP_PASS(FSS_STENCOP_KEEP);
-			gEnv->pRenderer->SetStencilState(stencilState, stencilRef, stencilMask, stencilWriteMask);
-
-			if (pass == Pass::First) {
-				// first pass, turn on stencil test for drawing children
-				IUiRenderer::Get()->SetBaseState(this->priorBaseState | GS_STENCIL);
-			} else {
-				// second pass, set base state back to what it was before rendering this element
-				IUiRenderer::Get()->SetBaseState(this->priorBaseState);
-			}
-		} else {
-			// masking is not enabled
-			// remove any color mask or alpha test that we set in pre-render
-			IUiRenderer::Get()->SetBaseState(this->priorBaseState);
-		}
-
-		if (
-			this->modelLoaded &&
-			(
-				(pass == Pass::First && !this->enableMasking) || 
-				(pass == Pass::Second && this->enableMasking)
-			)
-		) this->PostRender();
-	};
-	void Cubism3UIComponent::SetupAfterRenderingChildren(bool& isSecondComponentsPassRequired) {
-		if (enableMasking || drawMaskVisualInFrontOfChildren) {
-			isSecondComponentsPassRequired = true;
-		}
-	};*/
-	// ~UiRenderControlInterface
-
+	
 	// Cubism3UIBus
 	//load type
 	void Cubism3UIComponent::SetLoadType(LoadType lt) {
@@ -486,35 +536,37 @@ namespace Cubism3 {
 
 	//threading
 	void Cubism3UIComponent::SetThreading(Cubism3UIInterface::Threading t) {
-		if (Cubism3UIComponent::m_threadingOverride == DISABLED) {
-			if (t == DISABLED) t = NONE;
-			this->m_threading = t;
-		} else
-			this->m_threading = Cubism3UIComponent::m_threadingOverride;
+		if (this->modelLoaded) {
+			if (Cubism3UIComponent::m_threadingOverride == DISABLED) {
+				if (t == DISABLED) t = NONE;
+				this->m_threading = t;
+			} else
+				this->m_threading = Cubism3UIComponent::m_threadingOverride;
 
-		this->threadMutex.Lock();
-		if (this->tJob) {
-			this->tJob->Cancel();
-			this->tJob->WaitTillReady();
-			delete this->tJob;
-			this->tJob = nullptr;
+			this->threadMutex.Lock();
+			if (this->tJob) {
+				this->tJob->Cancel();
+				this->tJob->WaitTillReady();
+				delete this->tJob;
+				this->tJob = nullptr;
+			}
+
+			//depending if we want no threading, single thread, or multithread
+			//create a new update thread.
+			switch (this->m_threading) {
+			case SINGLE:
+				this->tJob = new DrawableSingleThread(&this->drawables);
+				this->tJob->SetModel(this->model);
+				break;
+			case MULTI:
+				this->tJob = new DrawableMultiThread(&this->drawables, this->threadLimiter);
+				this->tJob->SetModel(this->model);
+				break;
+			}
+
+			if (this->tJob) this->tJob->Start(); //start the update thread
+			this->threadMutex.Unlock();
 		}
-
-		//depending if we want no threading, single thread, or multithread
-		//create a new update thread.
-		switch (this->m_threading) {
-		case SINGLE:
-			this->tJob = new DrawableSingleThread(&this->drawables);
-			this->tJob->SetModel(this->model);
-			break;
-		case MULTI:
-			this->tJob = new DrawableMultiThread(&this->drawables, this->threadLimiter);
-			this->tJob->SetModel(this->model);
-			break;
-		}
-
-		if (this->tJob) this->tJob->Start(); //start the update thread
-		this->threadMutex.Unlock();
 	}
 	Cubism3UIInterface::Threading Cubism3UIComponent::GetThreading() { return this->m_threading; }
 	void Cubism3UIComponent::SetMultiThreadLimiter(unsigned int limiter) {
@@ -1155,7 +1207,25 @@ namespace Cubism3 {
 			const uint32 stencilRef = IUiRenderer::Get()->GetStencilRef();
 			const uint32 stencilMask = 0xFF;
 			const uint32 stencilWriteMask = 0xFF;
+			
+			#ifndef ENABLE_CUBISM3_DEBUG
 			const int32 stencilState = STENC_FUNC(FSS_STENCFUNC_EQUAL) | STENCOP_FAIL(FSS_STENCOP_KEEP) | STENCOP_ZFAIL(FSS_STENCOP_KEEP);
+			#else
+			int32 stencilState = 0;
+
+			if (stencilFunc != SFunc::FDISABLE) stencilState |= STENC_FUNC(stencilFunc);
+			if (stencilCCWFunc != SFunc::FDISABLE) stencilState |= STENC_CCW_FUNC(stencilCCWFunc);
+
+			if (opFail != SOp::ODISABLE) stencilState |= STENCOP_FAIL(opFail);
+			if (opZFail != SOp::ODISABLE) stencilState |= STENCOP_ZFAIL(opZFail);
+			if (opPass != SOp::ODISABLE) stencilState |= STENCOP_PASS(opPass);
+
+			if (opCCWFail != SOp::ODISABLE) stencilState |= STENCOP_CCW_FAIL(opCCWFail);
+			if (opCCWZFail != SOp::ODISABLE) stencilState |= STENCOP_CCW_ZFAIL(opCCWZFail);
+			if (opCCWPass != SOp::ODISABLE) stencilState |= STENCOP_CCW_PASS(opCCWPass);
+			if (sTwoSided) stencilState |= FSS_STENCIL_TWOSIDED;
+			#endif
+
 			gEnv->pRenderer->SetStencilState(stencilState, stencilRef, stencilMask, stencilWriteMask);
 
 			IUiRenderer::Get()->SetBaseState(this->priorBaseState | GS_STENCIL | alphaTest | colorMask);
@@ -1171,7 +1241,25 @@ namespace Cubism3 {
 			const uint32 stencilRef = IUiRenderer::Get()->GetStencilRef();
 			const uint32 stencilMask = 0xFF;
 			const uint32 stencilWriteMask = 0x00;
+			
+			#ifndef ENABLE_CUBISM3_DEBUG
 			const int32 stencilState = STENC_FUNC(FSS_STENCFUNC_EQUAL) | STENCOP_FAIL(FSS_STENCOP_KEEP) | STENCOP_ZFAIL(FSS_STENCOP_KEEP) | STENCOP_PASS(FSS_STENCOP_KEEP);
+			#else
+			int32 stencilState = 0;
+
+			if (stencilFunc != SFunc::FDISABLE) stencilState |= STENC_FUNC(stencilFunc);
+			if (stencilCCWFunc != SFunc::FDISABLE) stencilState |= STENC_CCW_FUNC(stencilCCWFunc);
+
+			if (opFail != SOp::ODISABLE) stencilState |= STENCOP_FAIL(opFail);
+			if (opZFail != SOp::ODISABLE) stencilState |= STENCOP_ZFAIL(opZFail);
+			if (opPass != SOp::ODISABLE) stencilState |= STENCOP_PASS(opPass);
+
+			if (opCCWFail != SOp::ODISABLE) stencilState |= STENCOP_CCW_FAIL(opCCWFail);
+			if (opCCWZFail != SOp::ODISABLE) stencilState |= STENCOP_CCW_ZFAIL(opCCWZFail);
+			if (opCCWPass != SOp::ODISABLE) stencilState |= STENCOP_CCW_PASS(opCCWPass);
+			if (sTwoSided) stencilState |= FSS_STENCIL_TWOSIDED;
+			#endif
+
 			gEnv->pRenderer->SetStencilState(stencilState, stencilRef, stencilMask, stencilWriteMask);
 
 			IUiRenderer::Get()->SetBaseState(this->priorBaseState);
@@ -1245,26 +1333,35 @@ namespace Cubism3 {
 	//Threading stuff
 	///base thread
 	Cubism3UIComponent::DrawableThreadBase::DrawableThreadBase(AZStd::vector<Drawable*> *drawables) {
+		CLOG("[Cubism3] DTB - Base Init Start.");
 		this->m_drawables = drawables;
 		this->m_renderOrderChanged = false;
 		this->m_canceled = false;
+		CLOG("[Cubism3] DTB - Base Init End.");
 	}
 
 	void Cubism3UIComponent::DrawableThreadBase::Cancel() {
+		CLOG("[Cubism3] DTB - Base Cancel Start.");
 		this->WaitTillReady();
 		this->m_canceled = true;
 		this->Notify();
+		CLOG("[Cubism3] DTB - Base Cancel End.");
 	}
 
 	void Cubism3UIComponent::DrawableThreadBase::WaitTillReady() {
+		CLOG("[Cubism3] DTB - Base Wait Start.");
 		this->mutex.Lock();
 		this->mutex.Unlock();
+		CLOG("[Cubism3] DTB - Base Wait End.");
 	}
 
 	///single thread
 	void Cubism3UIComponent::DrawableSingleThread::Run() {
+		CLOG("[Cubism3] DST - Thread Run Start.");
 		while (!this->m_canceled) {
+			CLOG("[Cubism3] DST - Waiting...");
 			this->Wait();
+			CLOG("[Cubism3] DST - Running.");
 			this->mutex.Lock();
 			if (this->m_canceled) break;
 			this->m_renderOrderChanged = false;
@@ -1285,6 +1382,7 @@ namespace Cubism3 {
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
+		CLOG("[Cubism3] DST - Thread Run End.");
 	}
 
 	///multithread
@@ -1382,6 +1480,7 @@ namespace Cubism3 {
 	///multithread alt
 	//limited number of threads, each thread updates a drawable.
 	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> *drawables, unsigned int limiter) : DrawableThreadBase(drawables) {
+		CLOG("[Cubism3] DMT - Multi Init Start.");
 		m_threads = new SubThread*[limiter];
 		this->numThreads = limiter;
 
@@ -1389,8 +1488,10 @@ namespace Cubism3 {
 			m_threads[i] = new SubThread(this);
 			m_threads[i]->Start();
 		}
+		CLOG("[Cubism3] DMT - Multi Init End.");
 	}
 	Cubism3UIComponent::DrawableMultiThread::~DrawableMultiThread() {
+		CLOG("[Cubism3] DMT - Multi Destroy Start.");
 		for (int i = 0; i < numThreads; i++) {
 			this->m_threads[i]->Cancel();
 			this->m_threads[i]->WaitTillReady();
@@ -1401,11 +1502,15 @@ namespace Cubism3 {
 
 		this->Cancel();
 		this->WaitTillReady();
+		CLOG("[Cubism3] DMT - Multi Destroy End.");
 	}
 
 	void Cubism3UIComponent::DrawableMultiThread::Run() {
+		CLOG("[Cubism3] DMT - Run Start.");
 		while (!this->m_canceled) {
+			CLOG("[Cubism3] DMT - Waiting...");
 			this->Wait();
+			CLOG("[Cubism3] DMT - Running.");
 			this->mutex.Lock();
 			if (this->m_canceled) break;
 
@@ -1429,36 +1534,50 @@ namespace Cubism3 {
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
+		CLOG("[Cubism3] DMT - Run End.");
 	}
 
 	bool Cubism3UIComponent::DrawableMultiThread::RenderOrderChanged() {
+		CLOG("[Cubism3] DMT - Render Order Changed Start.");
 		bool ret = false;
 		this->rwmutex.RLock();
 		ret = this->m_renderOrderChanged;
 		this->rwmutex.RUnlock();
 		return ret;
+		CLOG("[Cubism3] DMT - Render Order Changed End.");
 	}
 
 	Cubism3UIComponent::Drawable * Cubism3UIComponent::DrawableMultiThread::GetNextDrawable() {
+		CLOG("[Cubism3] DMT - GetNextDrawable Start.");
 		if (!this->m_canceled) {
-			if (this->nextDrawable >= this->drawables->size()) return nullptr;
-			Drawable * ret = this->drawables->at(this->nextDrawable);
+			if (this->nextDrawable >= this->m_drawables->size()) {
+				CLOG("[Cubism3] DMT - GetNextDrawable End - No Drawable.");
+				return nullptr;
+			}
+			Drawable * ret = this->m_drawables->at(this->nextDrawable);
 			this->nextDrawable++;
+			CLOG("[Cubism3] DMT - GetNextDrawable End - Has Drawable.");
 			return ret;
 		}
+		CLOG("[Cubism3] DMT - GetNextDrawable End - Canceled.");
 		return nullptr;
 	}
 
 	///multithread alt - sub thread
 	void Cubism3UIComponent::DrawableMultiThread::SubThread::Cancel() {
+		CLOG("[Cubism3] DMT - SubThread[%i] - Cancel Start.", this->m_threadId);
 		this->WaitTillReady();
 		this->m_canceled = true;
 		this->Notify();
+		CLOG("[Cubism3] DMT - SubThread[%i] - Cancel End.", this->m_threadId);
 	}
 	void Cubism3UIComponent::DrawableMultiThread::SubThread::Run(){
+		CLOG("[Cubism3] DMT - SubThread[%i] - Run Start.", this->m_threadId);
 		Drawable * d = nullptr;
 		while (!this->m_canceled) {
+			CLOG("[Cubism3] DMT - SubThread[%i] - Waiting...", this->m_threadId);
 			this->Wait();
+			CLOG("[Cubism3] DMT - SubThread[%i] - Running.", this->m_threadId);
 			this->mutex.Lock();
 			if (this->m_canceled) break;
 
@@ -1489,10 +1608,13 @@ namespace Cubism3 {
 			this->mutex.Unlock();
 		}
 		this->mutex.Unlock();
+		CLOG("[Cubism3] DMT - SubThread[%i] - Run End.", this->m_threadId);
 	}
 
 	void Cubism3UIComponent::DrawableMultiThread::SubThread::WaitTillReady() {
+		CLOG("[Cubism3] DMT - SubThread[%i] - Wait Start.", this->m_threadId);
 		this->mutex.Lock();
 		this->mutex.Unlock();
+		CLOG("[Cubism3] DMT - SubThread[%i] - Wait End.", this->m_threadId);
 	}
 }
