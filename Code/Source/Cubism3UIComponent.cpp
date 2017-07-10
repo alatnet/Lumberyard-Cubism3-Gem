@@ -6,6 +6,8 @@
 #include <AzCore/RTTI/BehaviorContext.h>
 #include <AzCore/Component/ComponentApplicationBus.h>
 
+#include <AzCore/std/sort.h>
+
 #include <LyShine/IDraw2d.h>
 #include <LyShine/UiSerializeHelpers.h>
 #include <LyShine/Bus/UiElementBus.h>
@@ -772,7 +774,14 @@ namespace Cubism3 {
 					this->modelSize.SetX(abs(minX) + abs(maxX));
 					this->modelSize.SetY(abs(minY) + abs(maxY));
 
-					std::sort(this->drawables.begin(), this->drawables.end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; }); //sort the drawables by render order
+					//sort the drawables by render order
+					AZStd::sort(
+						this->drawables.begin(),
+						this->drawables.end(),
+						[](Drawable * a, Drawable * b) -> bool {
+							return a->renderOrder < b->renderOrder;
+						}
+					);
 
 					this->threadMutex.Lock();
 					//threading
@@ -1226,13 +1235,13 @@ namespace Cubism3 {
 		} else {
 			csmResetDrawableDynamicFlags(this->model);
 			if (this->renderOrderChanged)
-				std::sort(
+				AZStd::sort(
 					this->drawables.begin(),
 					this->drawables.end(),
 					[](Drawable * a, Drawable * b) -> bool {
 						return a->renderOrder < b->renderOrder;
 					}
-			);
+				);
 		}
 	}
 
@@ -1569,7 +1578,14 @@ namespace Cubism3 {
 			for (int i = 0; i < numThreads; i++) this->m_threads[i]->Notify(); //wake up worker threads
 			for (int i = 0; i < numThreads; i++) this->m_threads[i]->WaitTillReady(); //wait until the worker threads are done
 
-			if (this->m_renderOrderChanged) std::sort(this->m_drawables->begin(), this->m_drawables->end(), [](Drawable * a, Drawable * b) -> bool { return a->renderOrder < b->renderOrder; });
+			if (this->m_renderOrderChanged)
+				AZStd::sort(
+					this->m_drawables->begin(),
+					this->m_drawables->end(),
+					[](Drawable * a, Drawable * b) -> bool {
+						return a->renderOrder < b->renderOrder;
+					}
+				);
 
 			csmResetDrawableDynamicFlags(this->m_model);
 

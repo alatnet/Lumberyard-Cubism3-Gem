@@ -249,6 +249,7 @@ namespace Cubism3 {
 		} Part;
 		AZStd::vector<Part*> parts;
 		AZStd::unordered_map<AZStd::string, int> partsMap;
+
 	private: //drawable stuff
 		AZ::Matrix4x4 transform, uvTransform, prevViewport;
 		bool transformUpdated;
@@ -267,7 +268,6 @@ namespace Cubism3 {
 			float opacity; //csmGetDrawableOpacities //color (alpha) //update as needed?
 			uint32 packedOpacity;
 
-			//UiMaskBus usage
 			int maskCount; //csmGetDrawableMaskCounts
 			uint16 * maskIndices; //csmGetDrawableMasks
 
