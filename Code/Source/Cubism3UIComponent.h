@@ -119,6 +119,17 @@ namespace Cubism3 {
 		float GetParameterValueS(AZStd::string name);
 		void SetParameterValueS(AZStd::string name, float value);
 
+		//parts
+		int GetPartCount();
+		int GetPartIdByName(AZStd::string name);
+		AZStd::string GetPartName(int index);
+		//parts by index
+		float GetPartOpacityI(int index);
+		void SetPartOpacityI(int index, float value);
+		//parts by name
+		float GetPartOpacityS(AZStd::string name);
+		void SetPartOpacityS(AZStd::string name, float value);
+
 		//threading
 		void SetThreading(Cubism3UIInterface::Threading t);
 		Cubism3UIInterface::Threading GetThreading();
@@ -230,6 +241,14 @@ namespace Cubism3 {
 		AZStd::vector<Parameter*> parameters;
 		AZStd::unordered_map<AZStd::string, int> parametersMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
+	private: //part stuff
+		typedef struct Part {
+			AZStd::string name;
+			int id;
+			float *val;
+		} Part;
+		AZStd::vector<Part*> parts;
+		AZStd::unordered_map<AZStd::string, int> partsMap;
 	private: //drawable stuff
 		AZ::Matrix4x4 transform, uvTransform, prevViewport;
 		bool transformUpdated;

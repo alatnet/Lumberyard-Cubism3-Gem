@@ -47,9 +47,20 @@ namespace Cubism3 {
 		virtual float GetParameterMinS(AZStd::string name) = 0;
 		virtual float GetParameterValueS(AZStd::string name) = 0;
 		virtual void SetParameterValueS(AZStd::string name, float value) = 0;
-	public:
-		static const AZ::EBusHandlerPolicy HandlerPolicy = AZ::EBusHandlerPolicy::Single;
-	//#ifdef CUBISM3_ENABLE_THREADING
+
+	public: //parts
+		virtual int GetPartCount() = 0;
+		virtual int GetPartIdByName(AZStd::string name) = 0;
+		virtual  AZStd::string GetPartName(int index) = 0;
+
+	public: //parts by index
+		virtual float GetPartOpacityI(int index) = 0;
+		virtual void SetPartOpacityI(int index, float value) = 0;
+
+	public: //parts by name
+		virtual float GetPartOpacityS(AZStd::string name) = 0;
+		virtual void SetPartOpacityS(AZStd::string name, float value) = 0;
+
 	public: //threading
 		enum Threading {
 			NONE,
@@ -61,7 +72,8 @@ namespace Cubism3 {
 		virtual Threading GetThreading() = 0;
 		virtual void SetMultiThreadLimiter(unsigned int limiter) = 0;
 		virtual unsigned int GetMultiThreadLimiter() = 0;
-	//#endif
+	public:
+		static const AZ::EBusHandlerPolicy HandlerPolicy = AZ::EBusHandlerPolicy::Single;
 	};
 	using Cubism3UIBus = AZ::EBus<Cubism3UIInterface>;
 } // namespace Cubism3

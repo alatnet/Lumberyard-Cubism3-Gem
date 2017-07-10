@@ -19,14 +19,12 @@
 
 namespace Cubism3 {
 	#ifdef CUBISM3_THREADING
-		Cubism3UIInterface::Threading Cubism3UIComponent::m_threadingOverride = CUBISM3_THREADING;
+	Cubism3UIInterface::Threading Cubism3UIComponent::m_threadingOverride = CUBISM3_THREADING;
 	#else
-		Cubism3UIInterface::Threading Cubism3UIComponent::m_threadingOverride = Cubism3UIInterface::Threading::DISABLED;
+	Cubism3UIInterface::Threading Cubism3UIComponent::m_threadingOverride = Cubism3UIInterface::Threading::DISABLED;
 	#endif
 
-		const char* cubism3_profileMarker = "UI_CUBISM3";
-		const char* cubism3_maskIncProfileMarker = "UI_CUBISM3_MASK_INC";
-		const char* cubism3_maskDecProfileMarker = "UI_CUBISM3_MASK_DEC";
+	const char* cubism3_profileMarker = "UI_CUBISM3";
 
 	Cubism3UIComponent::Cubism3UIComponent() {
 		this->transform = this->prevViewport =  AZ::Matrix4x4::CreateIdentity();
@@ -87,13 +85,11 @@ namespace Cubism3 {
 
 	void Cubism3UIComponent::Activate() {
 		UiRenderBus::Handler::BusConnect(m_entity->GetId());
-		//UiRenderControlBus::Handler::BusConnect(m_entity->GetId());
 		Cubism3UIBus::Handler::BusConnect(m_entity->GetId());
 	}
 
 	void Cubism3UIComponent::Deactivate() {
 		UiRenderBus::Handler::BusDisconnect();
-		//UiRenderControlBus::Handler::BusDisconnect();
 		Cubism3UIBus::Handler::BusDisconnect();
 	}
 
@@ -318,6 +314,16 @@ namespace Cubism3 {
 				EBUS_METHOD(GetParameterMinS)
 				EBUS_METHOD(GetParameterValueS)
 				EBUS_METHOD(SetParameterValueS)
+				//parts
+				EBUS_METHOD(GetPartCount)
+				EBUS_METHOD(GetPartIdByName)
+				EBUS_METHOD(GetPartName)
+				//parts by index
+				EBUS_METHOD(GetPartOpacityI)
+				EBUS_METHOD(SetPartOpacityI)
+				//parts by name
+				EBUS_METHOD(GetPartOpacityS)
+				EBUS_METHOD(SetPartOpacityS)
 				//Threading
 				EBUS_METHOD(SetThreading)
 				EBUS_METHOD(GetThreading)
@@ -534,6 +540,32 @@ namespace Cubism3 {
 	float Cubism3UIComponent::GetParameterValueS(AZStd::string name) { return GetParameterValueI(GetParameterIdByName(name)); }
 	void Cubism3UIComponent::SetParameterValueS(AZStd::string name, float value) { return SetParameterValueI(GetParameterIdByName(name), value); }
 
+	//parts
+	int Cubism3UIComponent::GetPartCount() { return this->parts.size(); }
+	int Cubism3UIComponent::GetPartIdByName(AZStd::string name) {
+		auto it = this->partsMap.find(name);
+		if (it != this->partsMap.end()) return it->second;
+		return -1;
+	}
+	AZStd::string Cubism3UIComponent::GetPartName(int index) {
+		if (index < 0 || index >= this->parts.size()) return "";
+		return this->parts.at(index)->name;
+	}
+
+	//parts by index
+	float Cubism3UIComponent::GetPartOpacityI(int index) {
+		if (index < 0 || index >= this->parts.size()) return -1;
+		return *(this->parts.at(index)->val);
+	}
+	void Cubism3UIComponent::SetPartOpacityI(int index, float value) {
+		if (index < 0 || index >= this->parts.size()) return;
+		*(this->parts.at(index)->val) = value;
+	}
+
+	//parts by name
+	float Cubism3UIComponent::GetPartOpacityS(AZStd::string name) { return GetPartOpacityI(GetPartIdByName(name)); }
+	void Cubism3UIComponent::SetPartOpacityS(AZStd::string name, float value) { SetPartOpacityI(GetPartIdByName(name), value); }
+
 	//threading
 	void Cubism3UIComponent::SetThreading(Cubism3UIInterface::Threading t) {
 		if (this->modelLoaded) {
@@ -589,16 +621,16 @@ namespace Cubism3 {
 		#endif
 	}
 	void Cubism3UIComponent::ReleaseObject() {
+		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+		this->FreeAnimation();
+		#endif
+
 		if (this->lType == Single) {
 			this->FreeTexture();
 			this->FreeMoc();
 		} else {
 			this->FreeJson();
 		}
-
-		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-		this->FreeAnimation();
-		#endif
 	}
 
 	void Cubism3UIComponent::LoadMoc() {
@@ -655,6 +687,17 @@ namespace Cubism3 {
 						this->parametersMap[p->name] = p->id;
 					}
 					this->parameters.shrink_to_fit(); //free up unused memory
+
+					//get the parts of the model
+					const char** partsNames = csmGetPartIds(this->model);
+					for (int i = 0; i < csmGetPartCount(this->model); i++) {
+						Part * p = new Part;
+						p->id = i;
+						p->name = partsNames[i];
+						p->val = &csmGetPartOpacities(this->model)[i];
+						this->parametersMap[p->name] = p->id;
+					}
+					this->parts.shrink_to_fit();
 
 					//load drawable data
 					const char** drawableNames = csmGetDrawableIds(this->model);
@@ -1165,7 +1208,6 @@ namespace Cubism3 {
 				scaleX = rect.GetWidth() / this->modelSize.GetX();
 				scaleY = rect.GetHeight() / this->modelSize.GetY();
 			} else {
-				//float rectAspect = rect.GetWidth() / rect.GetHeight();
 				float modelSizeAspect = this->modelSize.GetX() / this->modelSize.GetY();
 
 				scaleX = (rect.GetHeight() * modelSizeAspect) / this->modelSize.GetX();
