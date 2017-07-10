@@ -111,7 +111,6 @@ namespace Cubism3 {
 				//->Field("Masking_DrawBehindChildren", &Cubism3UIComponent::drawMaskVisualBehindChildren)
 				//->Field("Masking_DrawInFrontChildren", &Cubism3UIComponent::drawMaskVisualInFrontOfChildren)
 				->Field("Masking_Alpha", &Cubism3UIComponent::useAlphaTest)
-				//->Field("RenderType", &Cubism3UIComponent::rType)
 				#ifdef USE_CUBISM3_ANIM_FRAMEWORK
 				->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames)
 				#endif
@@ -119,7 +118,6 @@ namespace Cubism3 {
 				#ifdef ENABLE_CUBISM3_DEBUG
 				->Field("Wireframe", &Cubism3UIComponent::wireframe)
 				->Field("Threading", &Cubism3UIComponent::m_threading)
-				//-Field("", &Cubism3UIComponent::)
 				QFIELD(stencilFunc)
 				QFIELD(stencilCCWFunc)
 				QFIELD(sTwoSided)
@@ -855,6 +853,11 @@ namespace Cubism3 {
 		if (this->parameters.size() != 0) {
 			this->parameters.clear(); //clear the parameters vector
 			this->parametersMap.clear(); //clear the parameters vector
+		}
+		
+		if (this->parts.size() >= 0) {
+			this->parts.clear();
+			this->partsMap.clear();
 		}
 
 		if (this->model) CryModuleMemalignFree(this->model); //free the model
