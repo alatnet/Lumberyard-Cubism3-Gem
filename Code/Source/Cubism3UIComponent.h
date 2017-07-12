@@ -1,20 +1,24 @@
 #pragma once
 
 #include <IRenderer.h>
+#include <Cry_Color.h>
+#include <ITexture.h>
+#include <VertexFormats.h>
+#include <CryThread.h>
 
 #include <LyShine/Bus/UiRenderBus.h>
 #include <LyShine/Bus/UiTransformBus.h>
-#include <Cry_Color.h>
 #include <LyShine/Bus/UiTransform2dBus.h>
 #include <LyShine/Bus/UiRenderControlBus.h>
 #include <LyShine/Bus/UiMaskBus.h>
-
-#include <Cubism3/Cubism3UIBus.h>
 
 #include <AzCore/Component/Component.h>
 #include <AzCore/Serialization/SerializeContext.h>
 
 #include "../../Engine/LmbrCentral/include/LmbrCentral/Rendering/MaterialAsset.h"
+
+#include "Cubism3Assets.h"
+#include <Cubism3/Cubism3UIBus.h>
 
 #include "Live2DCubismCore.h"
 
@@ -23,12 +27,6 @@
 #include "Live2DCubismFrameworkInternal.h"
 #endif
 
-#include <ITexture.h>
-#include <VertexFormats.h>
-
-#include <CryThread.h>
-
-#include "Cubism3Assets.h"
 
 #ifdef ENABLE_CUBISM3_DEBUG
 	#ifdef ENABLE_CUBISM3_DEBUGLOG
@@ -36,14 +34,21 @@
 	#else
 		#define CLOG(...)
 	#endif
+	#ifdef ENABLE_CUBISM3_THREADLOG
+		#define TLOG(...) CryLog(__VA_ARGS__)
+	#else
+		#define TLOG(...)
+	#endif
 #else
 	#define CLOG(...)
+	#define TLOG(...)
 #endif
 
 namespace Cubism3 {
 	class ModelParameter {
 	public:
 		AZ_RTTI(ModelParameter, "{F804F1A2-F3F5-4489-B326-2906F90FCB0F}");
+
 	public:
 		virtual ~ModelParameter() {}
 		AZStd::string name;
@@ -59,11 +64,17 @@ namespace Cubism3 {
 		static void Reflect(AZ::SerializeContext* serializeContext);
 	};
 
-	struct ModelParametersGroup {
+	class ModelParametersGroup {
+	public:
 		AZ_TYPE_INFO(ModelParametersGroup, "{0C617BC0-697E-4BEA-856B-F56776D7C32B}");
+
+	public:
 		AZStd::string m_name;
 		AZStd::vector<ModelParameter*>  m_params;
 		AZStd::unordered_map<AZStd::string, int> m_idMap;
+
+		ModelParameter* at(unsigned int index) { return m_params.at(index); }
+		size_t size() { return this->m_params.size(); }
 
 		void Clear();
 
@@ -76,12 +87,15 @@ namespace Cubism3 {
 
 		ModelParametersGroup(ModelParametersGroup&& rhs) { *this = AZStd::move(rhs); }
 		ModelParametersGroup& operator=(ModelParametersGroup&& rhs);
+
+	public:
 		static void Reflect(AZ::SerializeContext* serializeContext);
 	};
 
 	class ModelPart {
 	public:
 		AZ_RTTI(ModelPart, "{0E84D0AB-9ECF-4654-BD50-7D16D816C554}");
+
 	public:
 		virtual ~ModelPart() {}
 		AZStd::string name;
@@ -96,11 +110,17 @@ namespace Cubism3 {
 		static void Reflect(AZ::SerializeContext* serializeContext);
 	};
 
-	struct ModelPartsGroup {
+	class ModelPartsGroup {
+	public:
 		AZ_TYPE_INFO(ModelPartsGroup, "{59D3B9A9-E175-40C4-896A-AD85C8DE7D4F}");
+
+	public:
 		AZStd::string m_name;
 		AZStd::vector<ModelPart*>  m_parts;
 		AZStd::unordered_map<AZStd::string, int> m_idMap;
+
+		ModelPart* at(unsigned int index) { return m_parts.at(index); }
+		size_t size() { return this->m_parts.size(); }
 
 		void Clear();
 
@@ -113,6 +133,8 @@ namespace Cubism3 {
 
 		ModelPartsGroup(ModelPartsGroup&& rhs) { *this = AZStd::move(rhs); }
 		ModelPartsGroup& operator=(ModelPartsGroup&& rhs);
+
+	public:
 		static void Reflect(AZ::SerializeContext* serializeContext);
 	};
 
@@ -157,14 +179,9 @@ namespace Cubism3 {
 		static void Reflect(AZ::ReflectContext* context);
 
 	private: //dynamic editor listing
-		//parameters
 		static const AZ::Edit::ElementData* GetEditData(const void* handlerPtr, const void* elementPtr, const AZ::Uuid& elementType);
 		const AZ::Edit::ElementData* GetDataElement(const void* element, const AZ::Uuid& typeUuid) const;
-		//parts
-		/*static const AZ::Edit::ElementData* GetPartEditData(const void* handlerPtr, const void* elementPtr, const AZ::Uuid& elementType);
-		const AZ::Edit::ElementData* GetPartDataElement(const void* element, const AZ::Uuid& typeUuid) const;
-		*/
-	private: //for dynamic editor listing
+
 		struct ElementInfo {
 			AZ::Uuid m_uuid;                    // Type uuid for the class field that should use this edit data.
 			AZ::Edit::ElementData m_editData;   // Edit metadata (name, description, attribs, etc).
@@ -226,7 +243,7 @@ namespace Cubism3 {
 		void SetMultiThreadLimiter(unsigned int limiter);
 		unsigned int GetMultiThreadLimiter() { return this->threadLimiter; }
 		// ~Cubism3UIBus
-
+		
 	private:
 		void LoadObject();
 		void ReleaseObject();
