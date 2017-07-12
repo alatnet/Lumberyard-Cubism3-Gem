@@ -41,6 +41,81 @@
 #endif
 
 namespace Cubism3 {
+	class ModelParameter {
+	public:
+		AZ_RTTI(ModelParameter, "{F804F1A2-F3F5-4489-B326-2906F90FCB0F}");
+	public:
+		virtual ~ModelParameter() {}
+		AZStd::string name;
+		int id;
+		float min, max;
+		float *val;
+
+	public: //editor stuff
+		AZ::Edit::ElementData ed;
+		void InitEdit();
+
+	public: //RTTI stuff
+		static void Reflect(AZ::SerializeContext* serializeContext);
+	};
+
+	struct ModelParametersGroup {
+		AZ_TYPE_INFO(ModelParametersGroup, "{0C617BC0-697E-4BEA-856B-F56776D7C32B}");
+		AZStd::string m_name;
+		AZStd::vector<ModelParameter*>  m_params;
+		AZStd::unordered_map<AZStd::string, int> m_idMap;
+
+		void Clear();
+
+		ModelParametersGroup() : m_name("Parameters") {}
+		~ModelParametersGroup() { Clear(); }
+
+		// Disallow copying, only moving
+		ModelParametersGroup(const ModelParametersGroup& rhs) = delete;
+		ModelParametersGroup& operator=(ModelParametersGroup&) = delete;
+
+		ModelParametersGroup(ModelParametersGroup&& rhs) { *this = AZStd::move(rhs); }
+		ModelParametersGroup& operator=(ModelParametersGroup&& rhs);
+		static void Reflect(AZ::SerializeContext* serializeContext);
+	};
+
+	class ModelPart {
+	public:
+		AZ_RTTI(ModelPart, "{0E84D0AB-9ECF-4654-BD50-7D16D816C554}");
+	public:
+		virtual ~ModelPart() {}
+		AZStd::string name;
+		int id;
+		float *val;
+
+	public: //editor stuff
+		AZ::Edit::ElementData ed;
+		void InitEdit();
+
+	public: //RTTI stuff
+		static void Reflect(AZ::SerializeContext* serializeContext);
+	};
+
+	struct ModelPartsGroup {
+		AZ_TYPE_INFO(ModelPartsGroup, "{59D3B9A9-E175-40C4-896A-AD85C8DE7D4F}");
+		AZStd::string m_name;
+		AZStd::vector<ModelPart*>  m_parts;
+		AZStd::unordered_map<AZStd::string, int> m_idMap;
+
+		void Clear();
+
+		ModelPartsGroup() : m_name("Parts") {}
+		~ModelPartsGroup() { Clear(); }
+
+		// Disallow copying, only moving
+		ModelPartsGroup(const ModelPartsGroup& rhs) = delete;
+		ModelPartsGroup& operator=(ModelPartsGroup&) = delete;
+
+		ModelPartsGroup(ModelPartsGroup&& rhs) { *this = AZStd::move(rhs); }
+		ModelPartsGroup& operator=(ModelPartsGroup&& rhs);
+		static void Reflect(AZ::SerializeContext* serializeContext);
+	};
+
 	class Cubism3UIComponent
 		: public AZ::Component
 		, public UiRenderBus::Handler
@@ -80,6 +155,21 @@ namespace Cubism3 {
 		}
 
 		static void Reflect(AZ::ReflectContext* context);
+
+	private: //dynamic editor listing
+		//parameters
+		static const AZ::Edit::ElementData* GetEditData(const void* handlerPtr, const void* elementPtr, const AZ::Uuid& elementType);
+		const AZ::Edit::ElementData* GetDataElement(const void* element, const AZ::Uuid& typeUuid) const;
+		//parts
+		/*static const AZ::Edit::ElementData* GetPartEditData(const void* handlerPtr, const void* elementPtr, const AZ::Uuid& elementType);
+		const AZ::Edit::ElementData* GetPartDataElement(const void* element, const AZ::Uuid& typeUuid) const;
+		*/
+	private: //for dynamic editor listing
+		struct ElementInfo {
+			AZ::Uuid m_uuid;                    // Type uuid for the class field that should use this edit data.
+			AZ::Edit::ElementData m_editData;   // Edit metadata (name, description, attribs, etc).
+		};
+		AZStd::unordered_map<const void*, ElementInfo> m_dataElements;
 
 	public:
 		// UiRenderInterface
@@ -231,24 +321,14 @@ namespace Cubism3 {
 		//AzFramework::SimpleAssetReference<MotionAsset> *m_AnimationPathname;
 
 	private: //parameter stuff
-		typedef struct Parameter {
-			AZStd::string name;
-			int id;
-			float min, max;
-			float *val;
-		} Parameter;
-
-		AZStd::vector<Parameter*> parameters;
-		AZStd::unordered_map<AZStd::string, int> parametersMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
+		ModelParametersGroup params;
+		//AZStd::vector<ModelParameter*> parameters;
+		//AZStd::unordered_map<AZStd::string, int> parametersMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
 	private: //part stuff
-		typedef struct Part {
-			AZStd::string name;
-			int id;
-			float *val;
-		} Part;
-		AZStd::vector<Part*> parts;
-		AZStd::unordered_map<AZStd::string, int> partsMap;
+		ModelPartsGroup parts;
+		/*AZStd::vector<ModelPart*> parts;
+		AZStd::unordered_map<AZStd::string, int> partsMap;*/
 
 	private: //drawable stuff
 		AZ::Matrix4x4 transform, uvTransform, prevViewport;

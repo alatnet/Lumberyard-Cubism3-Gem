@@ -19,7 +19,12 @@ def build(bld):
 			#'CUBISM3_MULTITHREAD_LIMITER=4',
 
 			# Enables various debugging options to be usable within the editor
-			#'ENABLE_CUBISM3_DEBUG'
+			#'ENABLE_CUBISM3_DEBUG',
+
+			# Sets which animation framework to use
+			# 0 - Lumberyard implementation
+			# 1 - Live2D Cubism 3 implementation
+			#'CUBISM3_ANIMATION_FRAMEWORK=0'
 		],
 
         #library

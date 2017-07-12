@@ -99,6 +99,11 @@ namespace Cubism3 {
 		AZ::SerializeContext* serializeContext = azrtti_cast<AZ::SerializeContext*>(context);
 
 		if (serializeContext) {
+			ModelParameter::Reflect(serializeContext);
+			ModelParametersGroup::Reflect(serializeContext);
+			ModelPart::Reflect(serializeContext);
+			ModelPartsGroup::Reflect(serializeContext);
+
 			#define QFIELD(x) ->Field(#x,&Cubism3UIComponent::##x##) //quick field
 			serializeContext->Class<Cubism3UIComponent, AZ::Component>()
 				->Version(1)
@@ -108,10 +113,12 @@ namespace Cubism3 {
 				->Field("JSONFile", &Cubism3UIComponent::m_jsonPathname)
 				->Field("Fill", &Cubism3UIComponent::fill)
 				->Field("Masking", &Cubism3UIComponent::enableMasking)
-				//->Field("Masking_DrawBehindChildren", &Cubism3UIComponent::drawMaskVisualBehindChildren)
-				//->Field("Masking_DrawInFrontChildren", &Cubism3UIComponent::drawMaskVisualInFrontOfChildren)
 				->Field("Masking_Alpha", &Cubism3UIComponent::useAlphaTest)
-				#ifdef USE_CUBISM3_ANIM_FRAMEWORK
+
+				->Field("Params", &Cubism3UIComponent::params)
+				->Field("Parts", &Cubism3UIComponent::parts)
+
+				#if (CUBISM3_ANIMATION_FRAMEWORK == 1)
 				->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames)
 				#endif
 
@@ -138,17 +145,19 @@ namespace Cubism3 {
 				editInfo->ClassElement(AZ::Edit::ClassElements::EditorData, "")
 					->Attribute(AZ::Edit::Attributes::Icon, "Editor/Icons/Components/CharacterPhysics.png")
 					->Attribute(AZ::Edit::Attributes::ViewportIcon, "Editor/Icons/Components/Viewport/CharacterPhysics.png")
-					->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC("UI", 0x27ff46b0));
+					->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC("UI", 0x27ff46b0))
+					->Attribute(AZ::Edit::Attributes::AutoExpand, true);
 
 				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::lType, "Load Type", "What type of Cubism3 Model to load.")
 					->EnumAttribute(Cubism3UIInterface::LoadType::Single, "Single")
 					->EnumAttribute(Cubism3UIInterface::LoadType::JSON, "JSON")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnLoadTypeChange)
-					->Attribute(AZ::Edit::Attributes::ChangeNotify, AZ_CRC("RefreshEntireTree", 0xefbc823c));
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, AZ::Edit::PropertyRefreshLevels::EntireTree);
 
 				editInfo->DataElement(0, &Cubism3UIComponent::m_mocPathname, "Moc path", "The Moc path. Can be overridden by another component such as an interactable.")
 					->Attribute(AZ::Edit::Attributes::Visibility, &Cubism3UIComponent::IsLoadTypeSingle)
-					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnMocFileChange);
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnMocFileChange)
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, AZ::Edit::PropertyRefreshLevels::EntireTree);
 
 				editInfo->DataElement(0, &Cubism3UIComponent::m_imagePathname, "Image path", "The Image path. Can be overridden by another component such as an interactable.")
 					->Attribute(AZ::Edit::Attributes::Visibility, &Cubism3UIComponent::IsLoadTypeSingle)
@@ -156,7 +165,8 @@ namespace Cubism3 {
 
 				editInfo->DataElement(0, &Cubism3UIComponent::m_jsonPathname, "JSON path", "The JSON path. Can be overridden by another component such as an interactable.")
 					->Attribute(AZ::Edit::Attributes::Visibility, &Cubism3UIComponent::IsLoadTypeJSON)
-					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnJSONFileChange);
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnJSONFileChange)
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, AZ::Edit::PropertyRefreshLevels::EntireTree);
 
 				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::fill, "Fill", "Fill the model to the element's dimentions")
 					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnFillChange);
@@ -167,112 +177,154 @@ namespace Cubism3 {
 				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::useAlphaTest, "Use alpha test",
 					"Check this box to use the alpha channel in the mask visual's texture to define the mask.");
 
+				editInfo->SetDynamicEditDataProvider(&Cubism3UIComponent::GetEditData);
+
+				//parameters group
+				{
+					editInfo->DataElement(0, &Cubism3UIComponent::params);
+
+					ec->Class<ModelParametersGroup>("A Models parameter group", "This is a model group")
+						->ClassElement(AZ::Edit::ClassElements::EditorData, "ModelParametersGroup's class attributes.")
+						->Attribute(AZ::Edit::Attributes::NameLabelOverride, &ModelParametersGroup::m_name)
+						->Attribute(AZ::Edit::Attributes::AutoExpand, true)
+						->DataElement(0, &ModelParametersGroup::m_params, "m_params", "Parameters in this property group")
+						->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly);
+
+					ec->Class<ModelParameter>("Parameter", "A Model Parameter")
+						->ClassElement(AZ::Edit::ClassElements::EditorData, "Parameter Attribute.")
+						->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly)
+						->DataElement(AZ::Edit::UIHandlers::Slider, &ModelParameter::val, "val", "A float");
+				}
+
+				//part group
+				{
+					editInfo->DataElement(0, &Cubism3UIComponent::parts);
+
+					ec->Class<ModelPartsGroup>("A Parts opacity group", "This is a model group")
+						->ClassElement(AZ::Edit::ClassElements::EditorData, "ModelPartsGroup's class attributes.")
+						->Attribute(AZ::Edit::Attributes::NameLabelOverride, &ModelPartsGroup::m_name)
+						->Attribute(AZ::Edit::Attributes::AutoExpand, true)
+						->DataElement(0, &ModelPartsGroup::m_parts, "m_parts", "Parts in this property group")
+						->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly);
+
+					ec->Class<ModelPart>("Part", "A Part Opacity")
+						->ClassElement(AZ::Edit::ClassElements::EditorData, "Part Opacity.")
+						->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly)
+						->DataElement(AZ::Edit::UIHandlers::Slider, &ModelPart::val, "val", "A float");
+				}
+				
+				//debug group
 				#ifdef ENABLE_CUBISM3_DEBUG
-				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::wireframe, "Wireframe (Debug)", "Wireframe Mode");
+				{
+					editInfo->ClassElement(AZ::Edit::ClassElements::Group, "Debugging")
+						->Attribute(AZ::Edit::Attributes::AutoExpand, false);
 
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::m_threading, "Threading (Debug)", "Threading Mode")
-					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnThreadingChange)
-					->EnumAttribute(Cubism3UIInterface::Threading::NONE, "None")
-					->EnumAttribute(Cubism3UIInterface::Threading::SINGLE, "Single")
-					->EnumAttribute(Cubism3UIInterface::Threading::MULTI, "Multi");
+					editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::wireframe, "Wireframe (Debug)", "Wireframe Mode");
 
-				//Debug Stencil
-				#define QENUMSFUNC(x) ->EnumAttribute(Cubism3UIComponent::SFunc::##x##, #x)
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::stencilFunc, "Stencil Func (Debug)", "Stencil Function")
-					->EnumAttribute(Cubism3UIComponent::SFunc::FDISABLE, "DISABLE")
-					QENUMSFUNC(ALWAYS)
-					QENUMSFUNC(NEVER)
-					QENUMSFUNC(LESS)
-					QENUMSFUNC(LEQUAL)
-					QENUMSFUNC(GREATER)
-					QENUMSFUNC(GEQUAL)
-					QENUMSFUNC(EQUAL)
-					QENUMSFUNC(NOTEQUAL)
-					QENUMSFUNC(MASK)
-					;
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::stencilCCWFunc, "Stencil CCW Func (Debug)", "Stencil CCW Function")
-					->EnumAttribute(Cubism3UIComponent::SFunc::FDISABLE, "DISABLE")
-					QENUMSFUNC(ALWAYS)
-					QENUMSFUNC(NEVER)
-					QENUMSFUNC(LESS)
-					QENUMSFUNC(LEQUAL)
-					QENUMSFUNC(GREATER)
-					QENUMSFUNC(GEQUAL)
-					QENUMSFUNC(EQUAL)
-					QENUMSFUNC(NOTEQUAL)
-					QENUMSFUNC(MASK)
-					;
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::m_threading, "Threading (Debug)", "Threading Mode")
+						->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::OnThreadingChange)
+						->EnumAttribute(Cubism3UIInterface::Threading::NONE, "None")
+						->EnumAttribute(Cubism3UIInterface::Threading::SINGLE, "Single")
+						->EnumAttribute(Cubism3UIInterface::Threading::MULTI, "Multi");
+
+					//Debug Stencil
+					#define QENUMSFUNC(x) ->EnumAttribute(Cubism3UIComponent::SFunc::##x##, #x)
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::stencilFunc, "Stencil Func (Debug)", "Stencil Function")
+						->EnumAttribute(Cubism3UIComponent::SFunc::FDISABLE, "DISABLE")
+						QENUMSFUNC(ALWAYS)
+						QENUMSFUNC(NEVER)
+						QENUMSFUNC(LESS)
+						QENUMSFUNC(LEQUAL)
+						QENUMSFUNC(GREATER)
+						QENUMSFUNC(GEQUAL)
+						QENUMSFUNC(EQUAL)
+						QENUMSFUNC(NOTEQUAL)
+						QENUMSFUNC(MASK)
+						;
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::stencilCCWFunc, "Stencil CCW Func (Debug)", "Stencil CCW Function")
+						->EnumAttribute(Cubism3UIComponent::SFunc::FDISABLE, "DISABLE")
+						QENUMSFUNC(ALWAYS)
+						QENUMSFUNC(NEVER)
+						QENUMSFUNC(LESS)
+						QENUMSFUNC(LEQUAL)
+						QENUMSFUNC(GREATER)
+						QENUMSFUNC(GEQUAL)
+						QENUMSFUNC(EQUAL)
+						QENUMSFUNC(NOTEQUAL)
+						QENUMSFUNC(MASK)
+						;
 				#undef QENUMSFUNC
 
 				#define QENUMSOP(x) ->EnumAttribute(Cubism3UIComponent::SOp::##x##, #x)
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opFail, "Stencil Fail Op (Debug)", "Stencil Fail Operation")
-					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
-					QENUMSOP(KEEP)
-					QENUMSOP(REPLACE)
-					QENUMSOP(INCR)
-					QENUMSOP(DECR)
-					QENUMSOP(ZERO)
-					QENUMSOP(INCR_WRAP)
-					QENUMSOP(DECR_WRAP)
-					QENUMSOP(INVERT)
-					;
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opZFail, "Stencil ZFail Op (Debug)", "Stencil ZFail Operation")
-					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
-					QENUMSOP(KEEP)
-					QENUMSOP(REPLACE)
-					QENUMSOP(INCR)
-					QENUMSOP(DECR)
-					QENUMSOP(ZERO)
-					QENUMSOP(INCR_WRAP)
-					QENUMSOP(DECR_WRAP)
-					QENUMSOP(INVERT)
-					;
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opPass, "Stencil Pass Op (Debug)", "Stencil Pass Operation")
-					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
-					QENUMSOP(KEEP)
-					QENUMSOP(REPLACE)
-					QENUMSOP(INCR)
-					QENUMSOP(DECR)
-					QENUMSOP(ZERO)
-					QENUMSOP(INCR_WRAP)
-					QENUMSOP(DECR_WRAP)
-					QENUMSOP(INVERT)
-					;
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opFail, "Stencil Fail Op (Debug)", "Stencil Fail Operation")
+						->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+						QENUMSOP(KEEP)
+						QENUMSOP(REPLACE)
+						QENUMSOP(INCR)
+						QENUMSOP(DECR)
+						QENUMSOP(ZERO)
+						QENUMSOP(INCR_WRAP)
+						QENUMSOP(DECR_WRAP)
+						QENUMSOP(INVERT)
+						;
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opZFail, "Stencil ZFail Op (Debug)", "Stencil ZFail Operation")
+						->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+						QENUMSOP(KEEP)
+						QENUMSOP(REPLACE)
+						QENUMSOP(INCR)
+						QENUMSOP(DECR)
+						QENUMSOP(ZERO)
+						QENUMSOP(INCR_WRAP)
+						QENUMSOP(DECR_WRAP)
+						QENUMSOP(INVERT)
+						;
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opPass, "Stencil Pass Op (Debug)", "Stencil Pass Operation")
+						->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+						QENUMSOP(KEEP)
+						QENUMSOP(REPLACE)
+						QENUMSOP(INCR)
+						QENUMSOP(DECR)
+						QENUMSOP(ZERO)
+						QENUMSOP(INCR_WRAP)
+						QENUMSOP(DECR_WRAP)
+						QENUMSOP(INVERT)
+						;
 
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWFail, "Stencil CCW Fail Op (Debug)", "Stencil CCW Fail Operation")
-					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
-					QENUMSOP(KEEP)
-					QENUMSOP(REPLACE)
-					QENUMSOP(INCR)
-					QENUMSOP(DECR)
-					QENUMSOP(ZERO)
-					QENUMSOP(INCR_WRAP)
-					QENUMSOP(DECR_WRAP)
-					QENUMSOP(INVERT)
-					;
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWZFail, "Stencil CCW ZFail Op (Debug)", "Stencil CCW ZFail Operation")
-					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
-					QENUMSOP(KEEP)
-					QENUMSOP(REPLACE)
-					QENUMSOP(INCR)
-					QENUMSOP(DECR)
-					QENUMSOP(ZERO)
-					QENUMSOP(INCR_WRAP)
-					QENUMSOP(DECR_WRAP)
-					QENUMSOP(INVERT)
-					;
-				editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWPass, "Stencil CCW Pass Op (Debug)", "Stencil CCW Pass Operation")
-					->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
-					QENUMSOP(KEEP)
-					QENUMSOP(REPLACE)
-					QENUMSOP(INCR)
-					QENUMSOP(DECR)
-					QENUMSOP(ZERO)
-					QENUMSOP(INCR_WRAP)
-					QENUMSOP(DECR_WRAP)
-					QENUMSOP(INVERT)
-					;
-				#undef QENUMSOP
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWFail, "Stencil CCW Fail Op (Debug)", "Stencil CCW Fail Operation")
+						->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+						QENUMSOP(KEEP)
+						QENUMSOP(REPLACE)
+						QENUMSOP(INCR)
+						QENUMSOP(DECR)
+						QENUMSOP(ZERO)
+						QENUMSOP(INCR_WRAP)
+						QENUMSOP(DECR_WRAP)
+						QENUMSOP(INVERT)
+						;
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWZFail, "Stencil CCW ZFail Op (Debug)", "Stencil CCW ZFail Operation")
+						->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+						QENUMSOP(KEEP)
+						QENUMSOP(REPLACE)
+						QENUMSOP(INCR)
+						QENUMSOP(DECR)
+						QENUMSOP(ZERO)
+						QENUMSOP(INCR_WRAP)
+						QENUMSOP(DECR_WRAP)
+						QENUMSOP(INVERT)
+						;
+					editInfo->DataElement(AZ::Edit::UIHandlers::ComboBox, &Cubism3UIComponent::opCCWPass, "Stencil CCW Pass Op (Debug)", "Stencil CCW Pass Operation")
+						->EnumAttribute(Cubism3UIComponent::SOp::ODISABLE, "DISABLE")
+						QENUMSOP(KEEP)
+						QENUMSOP(REPLACE)
+						QENUMSOP(INCR)
+						QENUMSOP(DECR)
+						QENUMSOP(ZERO)
+						QENUMSOP(INCR_WRAP)
+						QENUMSOP(DECR_WRAP)
+						QENUMSOP(INVERT)
+						;
+					#undef QENUMSOP
+				}
 				#endif
 			}
 		}
@@ -332,6 +384,22 @@ namespace Cubism3 {
 				;
 			#undef EBUS_METHOD
 		}
+	}
+
+	//dynamic listing stuff
+	const AZ::Edit::ElementData* Cubism3UIComponent::GetEditData(const void* handlerPtr, const void* elementPtr, const AZ::Uuid& elementType) {
+		const Cubism3UIComponent * owner = reinterpret_cast<const Cubism3UIComponent*>(handlerPtr);
+		return owner->GetDataElement(elementPtr, elementType);
+	}
+	const AZ::Edit::ElementData* Cubism3UIComponent::GetDataElement(const void* element, const AZ::Uuid& typeUuid) const {
+		auto it = m_dataElements.find(element);
+		if (it != m_dataElements.end()) {
+			if (it->second.m_uuid == typeUuid) {
+				return &it->second.m_editData;
+			}
+		}
+
+		return nullptr;
 	}
 
 	// UiRenderInterface
@@ -494,10 +562,10 @@ namespace Cubism3 {
 	}
 
 	//parameters
-	int Cubism3UIComponent::GetParameterCount() { return this->parameters.size(); }
+	int Cubism3UIComponent::GetParameterCount() { return this->params.m_params.size(); }
 	int Cubism3UIComponent::GetParameterIdByName(AZStd::string name) {
-		auto it = this->parametersMap.find(name); //should be faster to find an id by name rather than searching for it sequentially
-		if (it != this->parametersMap.end()) return it->second;
+		auto it = this->params.m_idMap.find(name); //should be faster to find an id by name rather than searching for it sequentially
+		if (it != this->params.m_idMap.end()) return it->second;
 		return -1;
 
 		/*int ret = -1;
@@ -512,26 +580,26 @@ namespace Cubism3 {
 		return ret;*/
 	}
 	AZStd::string Cubism3UIComponent::GetParameterName(int index) {
-		if (index < 0 || index >= this->parameters.size()) return "";
-		return this->parameters.at(index)->name;
+		if (index < 0 || index >= this->params.m_params.size()) return "";
+		return this->params.m_params.at(index)->name;
 	}
 	
 	//parameters by index
 	float Cubism3UIComponent::GetParameterMaxI(int index) {
-		if (index < 0 || index >= this->parameters.size()) return -1;
-		return this->parameters.at(index)->max;
+		if (index < 0 || index >= this->params.m_params.size()) return -1;
+		return this->params.m_params.at(index)->max;
 	}
 	float Cubism3UIComponent::GetParameterMinI(int index) {
-		if (index < 0 || index >= this->parameters.size()) return -1;
-		return this->parameters.at(index)->min;
+		if (index < 0 || index >= this->params.m_params.size()) return -1;
+		return this->params.m_params.at(index)->min;
 	}
 	float Cubism3UIComponent::GetParameterValueI(int index) {
-		if (index < 0 || index >= this->parameters.size()) return -1;
-		return *(this->parameters.at(index)->val);
+		if (index < 0 || index >= this->params.m_params.size()) return -1;
+		return *(this->params.m_params.at(index)->val);
 	}
 	void Cubism3UIComponent::SetParameterValueI(int index, float value) {
-		if (index < 0 || index >= this->parameters.size()) return;
-		*(this->parameters.at(index)->val) = value;
+		if (index < 0 || index >= this->params.m_params.size()) return;
+		*(this->params.m_params.at(index)->val) = value;
 	}
 
 	//parameters by name
@@ -541,25 +609,25 @@ namespace Cubism3 {
 	void Cubism3UIComponent::SetParameterValueS(AZStd::string name, float value) { return SetParameterValueI(GetParameterIdByName(name), value); }
 
 	//parts
-	int Cubism3UIComponent::GetPartCount() { return this->parts.size(); }
+	int Cubism3UIComponent::GetPartCount() { return this->parts.m_parts.size(); }
 	int Cubism3UIComponent::GetPartIdByName(AZStd::string name) {
-		auto it = this->partsMap.find(name);
-		if (it != this->partsMap.end()) return it->second;
+		auto it = this->parts.m_idMap.find(name);
+		if (it != this->parts.m_idMap.end()) return it->second;
 		return -1;
 	}
 	AZStd::string Cubism3UIComponent::GetPartName(int index) {
-		if (index < 0 || index >= this->parts.size()) return "";
-		return this->parts.at(index)->name;
+		if (index < 0 || index >= this->parts.m_parts.size()) return "";
+		return this->parts.m_parts.at(index)->name;
 	}
 
 	//parts by index
 	float Cubism3UIComponent::GetPartOpacityI(int index) {
-		if (index < 0 || index >= this->parts.size()) return -1;
-		return *(this->parts.at(index)->val);
+		if (index < 0 || index >= this->parts.m_parts.size()) return -1;
+		return *(this->parts.m_parts.at(index)->val);
 	}
 	void Cubism3UIComponent::SetPartOpacityI(int index, float value) {
-		if (index < 0 || index >= this->parts.size()) return;
-		*(this->parts.at(index)->val) = value;
+		if (index < 0 || index >= this->parts.m_parts.size()) return;
+		*(this->parts.m_parts.at(index)->val) = value;
 	}
 
 	//parts by name
@@ -676,28 +744,45 @@ namespace Cubism3 {
 					const char** paramNames = csmGetParameterIds(this->model);
 
 					for (int i = 0; i < csmGetParameterCount(this->model); i++) {
-						Parameter * p = new Parameter;
+						ModelParameter * p = new ModelParameter;
 						p->id = i;
 						p->name = AZStd::string(paramNames[i]);
 						p->min = csmGetParameterMinimumValues(this->model)[i];
 						p->max = csmGetParameterMaximumValues(this->model)[i];
 						p->val = &csmGetParameterValues(this->model)[i];
 
-						this->parameters.push_back(p);
-						this->parametersMap[p->name] = p->id;
+						this->params.m_params.push_back(p);
+						this->params.m_idMap[p->name] = p->id;
+
+						//editor data
+						p->InitEdit();
+						ElementInfo ei;
+						ei.m_editData = p->ed;
+						ei.m_uuid = AZ::SerializeTypeInfo<float>::GetUuid();
+						this->m_dataElements.insert(AZStd::make_pair(p->val, ei));
 					}
-					this->parameters.shrink_to_fit(); //free up unused memory
+					this->params.m_params.shrink_to_fit(); //free up unused memory
 
 					//get the parts of the model
 					const char** partsNames = csmGetPartIds(this->model);
 					for (int i = 0; i < csmGetPartCount(this->model); i++) {
-						Part * p = new Part;
+						ModelPart * p = new ModelPart;
 						p->id = i;
-						p->name = partsNames[i];
+						p->name = AZStd::string(partsNames[i]);
 						p->val = &csmGetPartOpacities(this->model)[i];
-						this->parametersMap[p->name] = p->id;
+
+						this->parts.m_parts.push_back(p);
+						this->parts.m_idMap[p->name] = p->id;
+
+						//editor data
+						p->InitEdit();
+						ElementInfo ei;
+						ei.m_editData = p->ed;
+						ei.m_uuid = AZ::SerializeTypeInfo<float>::GetUuid();
+						this->m_dataElements.insert(AZStd::make_pair(p->val, ei));
+
 					}
-					this->parts.shrink_to_fit();
+					this->parts.m_parts.shrink_to_fit();
 
 					//load drawable data
 					const char** drawableNames = csmGetDrawableIds(this->model);
@@ -850,15 +935,9 @@ namespace Cubism3 {
 			this->drawables.clear(); //clear the drawables vector
 		}
 
-		if (this->parameters.size() != 0) {
-			this->parameters.clear(); //clear the parameters vector
-			this->parametersMap.clear(); //clear the parameters vector
-		}
-		
-		if (this->parts.size() >= 0) {
-			this->parts.clear();
-			this->partsMap.clear();
-		}
+		this->params.Clear();
+		this->parts.Clear();
+		this->m_dataElements.clear(); //clear all editor data
 
 		if (this->model) CryModuleMemalignFree(this->model); //free the model
 		if (this->moc) CryModuleMemalignFree(this->moc); //free the moc
@@ -1678,4 +1757,68 @@ namespace Cubism3 {
 		this->mutex.Unlock();
 		CLOG("[Cubism3] DMT - SubThread[%i] - Wait End.", this->m_threadId);
 	}
+	
+	//----------------------------------------------------------------------------------
+	//Model Parameters Stuff
+	void ModelParameter::InitEdit() {
+		this->ed.m_elementId = AZ::Edit::UIHandlers::Slider;
+		this->ed.m_name = this->name.c_str();
+		this->ed.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Max, aznew AZ::Edit::AttributeData<float>(this->max))); //parameter min
+		this->ed.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Min, aznew AZ::Edit::AttributeData<float>(this->min))); //parameter max
+	}
+
+	void ModelParameter::Reflect(AZ::SerializeContext* serializeContext) {
+		serializeContext->Class<ModelParameter>()->
+			Version(1)
+			->Field("id", &ModelParameter::id)
+			->Field("name", &ModelParameter::name)
+			->Field("value", &ModelParameter::val);
+	}
+
+	void ModelParametersGroup::Clear() {
+		if (this->m_params.size() != 0) {
+			this->m_params.clear(); //clear the parameters vector
+			this->m_idMap.clear(); //clear the parameters id map
+		}
+	}
+
+	void ModelParametersGroup::Reflect(AZ::SerializeContext* serializeContext) {
+		serializeContext->Class<ModelParametersGroup>()
+			->Field("Name", &ModelParametersGroup::m_name)
+			->Field("Params", &ModelParametersGroup::m_params)
+			;
+	}
+	//----------------------------------------------------------------------------------
+
+	//----------------------------------------------------------------------------------
+	//Model Parts Stuff
+	void ModelPart::InitEdit() {
+		this->ed.m_elementId = AZ::Edit::UIHandlers::Slider;
+		this->ed.m_name = this->name.c_str();
+		this->ed.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Max, aznew AZ::Edit::AttributeData<float>(1.0f))); //parameter min
+		this->ed.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Min, aznew AZ::Edit::AttributeData<float>(0.0f))); //parameter max
+	}
+
+	void ModelPart::Reflect(AZ::SerializeContext* serializeContext) {
+		serializeContext->Class<ModelPart>()->
+			Version(1)
+			->Field("id", &ModelPart::id)
+			->Field("name", &ModelPart::name)
+			->Field("value", &ModelPart::val);
+	}
+
+	void ModelPartsGroup::Clear() {
+		if (this->m_parts.size() != 0) {
+			this->m_parts.clear(); //clear the parameters vector
+			this->m_idMap.clear(); //clear the parameters id map
+		}
+	}
+
+	void ModelPartsGroup::Reflect(AZ::SerializeContext* serializeContext) {
+		serializeContext->Class<ModelPartsGroup>()
+			->Field("Name", &ModelPartsGroup::m_name)
+			->Field("Parts", &ModelPartsGroup::m_parts)
+			;
+	}
+	//----------------------------------------------------------------------------------
 }
