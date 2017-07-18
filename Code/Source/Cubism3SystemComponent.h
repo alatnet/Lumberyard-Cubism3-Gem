@@ -3,7 +3,6 @@
 
 #include <AzCore/Component/Component.h>
 
-#include <Cubism3/Cubism3Bus.h>
 #include <LyShine/Bus/UiSystemBus.h>
 
 #include "Live2DCubismCore.h"
@@ -14,7 +13,6 @@ namespace Cubism3
 {
     class Cubism3SystemComponent
         : public AZ::Component
-        , protected Cubism3RequestBus::Handler
 		, protected UiSystemBus::Handler
     {
     public:

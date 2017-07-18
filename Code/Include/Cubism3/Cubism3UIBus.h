@@ -1,8 +1,6 @@
 
 #pragma once
 
-#include <AzCore/Component/ComponentBus.h>
-
 namespace Cubism3 {
 
 	#ifndef CUBISM3_MULTITHREAD_LIMITER

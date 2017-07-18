@@ -20,12 +20,6 @@
 #include "Cubism3UIComponent.h"
 
 namespace Cubism3 {
-	#ifdef CUBISM3_THREADING
-	Cubism3UIInterface::Threading Cubism3UIComponent::m_threadingOverride = CUBISM3_THREADING;
-	#else
-	Cubism3UIInterface::Threading Cubism3UIComponent::m_threadingOverride = Cubism3UIInterface::Threading::DISABLED;
-	#endif
-
 	const char* cubism3_profileMarker = "UI_CUBISM3";
 
 	Cubism3UIComponent::Cubism3UIComponent() {
@@ -117,9 +111,7 @@ namespace Cubism3 {
 				->Field("Params", &Cubism3UIComponent::params)
 				->Field("Parts", &Cubism3UIComponent::parts)
 
-				#if (CUBISM3_ANIMATION_FRAMEWORK == 1)
-				->Field("AnimationPaths", &Cubism3UIComponent::m_animationPathnames)
-				#endif
+				//->Field("testMotion", &Cubism3UIComponent::m_testMotion)
 
 				#ifdef ENABLE_CUBISM3_DEBUG
 				->Field("Wireframe", &Cubism3UIComponent::wireframe)
@@ -142,8 +134,8 @@ namespace Cubism3 {
 				auto editInfo = ec->Class<Cubism3UIComponent>("Cubism3", "A visual component to draw a Cubism3 Model.");
 
 				editInfo->ClassElement(AZ::Edit::ClassElements::EditorData, "")
-					->Attribute(AZ::Edit::Attributes::Icon, "Editor/Icons/Components/CharacterPhysics.png")
-					->Attribute(AZ::Edit::Attributes::ViewportIcon, "Editor/Icons/Components/Viewport/CharacterPhysics.png")
+					->Attribute(AZ::Edit::Attributes::Icon, "Editor/Icons/Components/Ragdoll.png")
+					->Attribute(AZ::Edit::Attributes::ViewportIcon, "Editor/Icons/Components/Viewport/Ragdoll.png")
 					->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC("UI", 0x27ff46b0))
 					->Attribute(AZ::Edit::Attributes::AutoExpand, true);
 
@@ -176,6 +168,9 @@ namespace Cubism3 {
 				editInfo->DataElement(AZ::Edit::UIHandlers::CheckBox, &Cubism3UIComponent::useAlphaTest, "Use alpha test",
 					"Check this box to use the alpha channel in the mask visual's texture to define the mask.");
 
+				/*editInfo->DataElement(0, &Cubism3UIComponent::m_testMotion, "Test Motion Asset", "")
+					->Attribute(AZ::Edit::Attributes::ChangeNotify, &Cubism3UIComponent::testMotionCN);*/
+
 				editInfo->SetDynamicEditDataProvider(&Cubism3UIComponent::GetEditData);
 
 				//parameters group
@@ -185,7 +180,7 @@ namespace Cubism3 {
 					ec->Class<ModelParametersGroup>("A Models parameter group", "This is a model group")
 						->ClassElement(AZ::Edit::ClassElements::EditorData, "ModelParametersGroup's class attributes.")
 						->Attribute(AZ::Edit::Attributes::NameLabelOverride, &ModelParametersGroup::m_name)
-						->Attribute(AZ::Edit::Attributes::AutoExpand, true)
+						->Attribute(AZ::Edit::Attributes::AutoExpand, false)
 						->DataElement(0, &ModelParametersGroup::m_params, "m_params", "Parameters in this property group")
 						->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly);
 
@@ -202,7 +197,7 @@ namespace Cubism3 {
 					ec->Class<ModelPartsGroup>("A Parts opacity group", "This is a model group")
 						->ClassElement(AZ::Edit::ClassElements::EditorData, "ModelPartsGroup's class attributes.")
 						->Attribute(AZ::Edit::Attributes::NameLabelOverride, &ModelPartsGroup::m_name)
-						->Attribute(AZ::Edit::Attributes::AutoExpand, true)
+						->Attribute(AZ::Edit::Attributes::AutoExpand, false)
 						->DataElement(0, &ModelPartsGroup::m_parts, "m_parts", "Parts in this property group")
 						->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly);
 
@@ -393,8 +388,8 @@ namespace Cubism3 {
 	const AZ::Edit::ElementData* Cubism3UIComponent::GetDataElement(const void* element, const AZ::Uuid& typeUuid) const {
 		auto it = m_dataElements.find(element);
 		if (it != m_dataElements.end()) {
-			if (it->second.m_uuid == typeUuid) {
-				return &it->second.m_editData;
+			if (it->second->m_uuid == typeUuid) {
+				return &it->second->m_editData;
 			}
 		}
 
@@ -562,22 +557,7 @@ namespace Cubism3 {
 
 	//parameters
 	int Cubism3UIComponent::GetParameterCount() { return this->params.size(); }
-	int Cubism3UIComponent::GetParameterIdByName(AZStd::string name) {
-		auto it = this->params.m_idMap.find(name); //should be faster to find an id by name rather than searching for it sequentially
-		if (it != this->params.m_idMap.end()) return it->second;
-		return -1;
-
-		/*int ret = -1;
-
-		for (int i = 0; i < this->parameters.size(); i++) {
-			if (this->parameters.at(i)->name == name) {
-				ret = i;
-				break;
-			}
-		}
-
-		return ret;*/
-	}
+	int Cubism3UIComponent::GetParameterIdByName(AZStd::string name) { return this->params.find(name); }
 	AZStd::string Cubism3UIComponent::GetParameterName(int index) {
 		if (index < 0 || index >= this->params.size()) return "";
 		return this->params.at(index)->name;
@@ -609,11 +589,7 @@ namespace Cubism3 {
 
 	//parts
 	int Cubism3UIComponent::GetPartCount() { return this->parts.size(); }
-	int Cubism3UIComponent::GetPartIdByName(AZStd::string name) {
-		auto it = this->parts.m_idMap.find(name);
-		if (it != this->parts.m_idMap.end()) return it->second;
-		return -1;
-	}
+	int Cubism3UIComponent::GetPartIdByName(AZStd::string name) { return this->parts.find(name); }
 	AZStd::string Cubism3UIComponent::GetPartName(int index) {
 		if (index < 0 || index >= this->parts.size()) return "";
 		return this->parts.at(index)->name;
@@ -755,10 +731,10 @@ namespace Cubism3 {
 
 						//editor data
 						p->InitEdit();
-						ElementInfo ei;
-						ei.m_editData = p->ed;
-						ei.m_uuid = AZ::SerializeTypeInfo<float>::GetUuid();
-						this->m_dataElements.insert(AZStd::make_pair(p->val, ei));
+						//ElementInfo ei;
+						//ei.m_editData = p->ed;
+						//ei.m_uuid = AZ::SerializeTypeInfo<float>::GetUuid();
+						this->m_dataElements.insert(AZStd::make_pair(p->val, &p->ei));
 					}
 					this->params.m_params.shrink_to_fit(); //free up unused memory
 
@@ -775,10 +751,10 @@ namespace Cubism3 {
 
 						//editor data
 						p->InitEdit();
-						ElementInfo ei;
-						ei.m_editData = p->ed;
-						ei.m_uuid = AZ::SerializeTypeInfo<float>::GetUuid();
-						this->m_dataElements.insert(AZStd::make_pair(p->val, ei));
+						//ElementInfo ei;
+						//ei.m_editData = p->ed;
+						//ei.m_uuid = AZ::SerializeTypeInfo<float>::GetUuid();
+						this->m_dataElements.insert(AZStd::make_pair(p->val, &p->ei));
 
 					}
 					this->parts.m_parts.shrink_to_fit();
@@ -796,7 +772,6 @@ namespace Cubism3 {
 					const csmVector2** uvs = csmGetDrawableVertexUvs(this->model);
 					const int* numIndexes = csmGetDrawableIndexCounts(this->model);
 					const unsigned short** indices = csmGetDrawableIndices(this->model);
-
 					unsigned int drawCount = csmGetDrawableCount(this->model);
 					const int * drawOrder = csmGetDrawableDrawOrders(this->model);
 					const int * renderOrder = csmGetDrawableRenderOrders(this->model);
@@ -915,6 +890,7 @@ namespace Cubism3 {
 	}
 	void Cubism3UIComponent::FreeMoc() {
 		this->modelLoaded = false;
+
 		//delete the drawable update thread
 		this->threadMutex.Lock();
 		if (this->tJob) {
@@ -1065,7 +1041,7 @@ namespace Cubism3 {
 			AZStd::string MocPath = basePath + MocFileName;
 			const char * sanitizedPath = PathUtil::ToNativePath(MocPath.c_str());
 
-			CryLog("Moc Path: %s", sanitizedPath);
+			CLOG("[Cubism3] Moc Path: %s", sanitizedPath);
 
 			//verify moc exists
 			if (gEnv->pFileIO->Exists(sanitizedPath)) {
@@ -1099,7 +1075,7 @@ namespace Cubism3 {
 							AZStd::string texturePath = basePath + textureFileName + ext.substr(1);
 							const char * sanitizedPath = PathUtil::ToNativePath(texturePath.c_str());
 
-							CryLog("Texture Path: %s", sanitizedPath);
+							CLOG("[Cubism3] Texture Path: %s", sanitizedPath);
 
 							if (gEnv->pFileIO->Exists(sanitizedPath)) {
 								found = true;
@@ -1144,59 +1120,6 @@ namespace Cubism3 {
 		this->FreeTexture();
 	}
 
-	#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-	void Cubism3UIComponent::LoadAnimation() {
-		//load animations
-		if (this->m_animationPathnames.size() != 0) {
-			for (AzFramework::SimpleAssetReference<MotionAsset> asset : this->m_animationPathnames) {
-				if (asset.GetAssetPath().empty()) continue;
-
-				AZ::IO::HandleType animFileHandler;
-				gEnv->pFileIO->Open(asset.GetAssetPath().c_str(), AZ::IO::OpenMode::ModeBinary, animFileHandler);
-
-				AZ::u64 motionJsonSize;
-				gEnv->pFileIO->Size(animFileHandler, motionJsonSize);
-
-				char * motionJson = (char *)malloc(motionJsonSize);
-				gEnv->pFileIO->Read(animFileHandler, motionJson, motionJsonSize);
-
-				gEnv->pFileIO->Close(animFileHandler);
-
-				AnimationLayer* layer = new AnimationLayer; //delete
-				layer->Blend = csmOverrideFloatBlendFunction;
-				layer->Weight = 1.0f;
-				layer->enabled = false;
-				csmResetAnimationState(&layer->State);
-
-				unsigned int animSize = csmGetDeserializedSizeofAnimation(motionJson);
-
-				void * animbuff = malloc(animSize); //free
-				layer->Animation = csmDeserializeAnimationInPlace(motionJson, animbuff, animSize);
-
-				free(motionJson);
-
-				this->animations.push_back(layer);
-			}
-			this->animations.shrink_to_fit();
-		}
-
-		//load sink
-		unsigned int sinkSize = csmGetSizeofFloatSink(this->model);
-		void *sinkBuf = malloc(sinkSize); //free
-		this->sink = csmInitializeFloatSinkInPlace(this->model, sinkBuf, sinkSize);
-	}
-	void Cubism3UIComponent::FreeAnimation() {
-		if (this->sink) free(this->sink); //free the float sink
-
-		if (this->animations.size() != 0) {
-			for (AnimationLayer* layer : this->animations) free(layer->Animation); //free each animation
-			this->animations.clear(); //clear the animations vector
-		}
-
-		this->sink = nullptr;
-	}
-	#endif
-
 	void Cubism3UIComponent::OnMocFileChange() {
 		this->FreeMoc();
 		if (!this->m_mocPathname.GetAssetPath().empty()) this->LoadMoc();
@@ -1238,29 +1161,11 @@ namespace Cubism3 {
 		//threading
 		//if we are threading the drawable updates
 		if (this->m_threading != NONE && this->tJob) this->tJob->WaitTillReady(); //wait until the update thread is ready.
-
-		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-		if (this->animations.size() != 0) {
-			for (AnimationLayer* layer : this->animations) {
-				if (layer->enabled) {
-					csmTickAnimationState(&layer->State, gEnv->pTimer->GetFrameTime());
-					csmEvaluateAnimation(
-						layer->Animation,
-						&layer->State,
-						layer->Blend,
-						layer->Weight,
-						this->sink
-					);
-				}
-			}
-
-			csmFlushFloatSink(this->sink, this->model, 0, 0);
-		}
-		#endif
-
+		
 		if (this->m_threading == NONE && !this->tJob)
 			csmUpdateModel(this->model);
 
+		///have this also update in update thread if threading?
 		UiTransform2dInterface::Anchors anchors;
 		EBUS_EVENT_ID_RESULT(anchors, GetEntityId(), UiTransform2dBus, GetAnchors);
 		UiTransform2dInterface::Offsets offsets;
@@ -1462,362 +1367,7 @@ namespace Cubism3 {
 		}
 	}
 
-	//Threading stuff
-	///base thread
-	Cubism3UIComponent::DrawableThreadBase::DrawableThreadBase(AZStd::vector<Drawable*> *drawables) {
-		TLOG("[Cubism3] DTB - Base Init Start.");
-		this->m_drawables = drawables;
-		this->m_renderOrderChanged = false;
-		this->m_canceled = false;
-		TLOG("[Cubism3] DTB - Base Init End.");
-	}
-
-	void Cubism3UIComponent::DrawableThreadBase::Cancel() {
-		TLOG("[Cubism3] DTB - Base Cancel Start.");
-		this->WaitTillReady();
-		this->m_canceled = true;
-		this->Notify();
-		TLOG("[Cubism3] DTB - Base Cancel End.");
-	}
-
-	void Cubism3UIComponent::DrawableThreadBase::WaitTillReady() {
-		TLOG("[Cubism3] DTB - Base Wait Start.");
-		this->mutex.Lock();
-		this->mutex.Unlock();
-		TLOG("[Cubism3] DTB - Base Wait End.");
-	}
-
-	///single thread
-	void Cubism3UIComponent::DrawableSingleThread::Run() {
-		TLOG("[Cubism3] DST - Thread Run Start.");
-		while (!this->m_canceled) {
-			TLOG("[Cubism3] DST - Waiting...");
-			this->Wait();
-			TLOG("[Cubism3] DST - Running.");
-			this->mutex.Lock();
-			if (this->m_canceled) break;
-			this->m_renderOrderChanged = false;
-			csmUpdateModel(this->m_model);
-
-			for (Drawable* d : *m_drawables) d->update(this->m_model, this->m_transformUpdate, this->m_renderOrderChanged);
-
-			if (this->m_renderOrderChanged)
-				std::sort(
-					this->m_drawables->begin(),
-					this->m_drawables->end(),
-					[](Drawable * a, Drawable * b) -> bool {
-						return a->renderOrder < b->renderOrder;
-					}
-			);
-
-			csmResetDrawableDynamicFlags(this->m_model);
-			this->mutex.Unlock();
-		}
-		this->mutex.Unlock();
-		TLOG("[Cubism3] DST - Thread Run End.");
-	}
-
-	///multithread
-	//each drawable gets a thread.
-	/*
-	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> &drawables, AZ::Matrix4x4 &transform, unsigned int limiter = CUBISM3_MULTITHREAD_LIMITER) : DrawableThreadBase(drawables, transform) {
-		for (Drawable * d : drawables) {
-			SubThread * t = new SubThread(d, this);
-			t->Start();
-			this->m_threads.push_back(t);
-		}
-		this->m_threads.shrink_to_fit();
-
-		this->semaphore = new CrySemaphore(limiter); //limiter for subthread execution
-	}
-	Cubism3UIComponent::DrawableMultiThread::~DrawableMultiThread() {
-		for (SubThread* t : this->m_threads) {
-			t->Cancel();
-			t->WaitTillDone();
-			t->WaitForThread();
-		}
-		this->m_threads.clear();
-		
-		this->WaitTillReady();
-		this->Cancel();
-	}
-	
-	void Cubism3UIComponent::DrawableMultiThread::Run() {
-		while (!this->m_canceled) {
-			this->Wait();
-			this->mutex.Lock();
-			if (this->m_canceled) break;
-
-			this->rwmutex.WLock();
-			this->m_drawOrderChanged = this->m_renderOrderChanged = false;
-			this->rwmutex.WUnlock();
-
-			csmUpdateModel(this->m_model);
-
-			for (SubThread * t : this->m_threads) t->Notify();
-			for (SubThread * t : this->m_threads) t->WaitTillReady(); //make sure every thread is done before unblocking.
-			this->mutex.Unlock();
-		}
-		this->mutex.Unlock();
-	}
-
-	bool Cubism3UIComponent::DrawableMultiThread::DrawOrderChanged() {
-		bool ret = false;
-		this->rwmutex.RLock();
-		ret = this->m_drawOrderChanged;
-		this->rwmutex.RUnlock();
-		return ret;
-	}
-	bool Cubism3UIComponent::DrawableMultiThread::RenderOrderChanged() {
-		bool ret = false;
-		this->rwmutex.RLock();
-		ret = this->m_renderOrderChanged;
-		this->rwmutex.RUnlock();
-		return ret;
-	}
-
-	///multithread - sub thread
-	void Cubism3UIComponent::DrawableMultiThread::SubThread::Run() {
-		while (!this->m_canceled) {
-			this->Wait();
-			this->mutex.Lock();
-			this->m_dmt->semaphore->Acquire();
-
-			if (this->m_canceled) break;
-			bool drawOrderChanged = false, renderOrderChanged = false;
-			this->m_d->update(m_dmt->GetModel(),*m_dmt->GetTransform(), m_dmt->GetTransformUpdate(), drawOrderChanged, renderOrderChanged);
-
-			m_dmt->rwmutex.WLock();
-			if (drawOrderChanged) this->m_dmt->SetDrawOrderChanged(true);
-			if (renderOrderChanged) this->m_dmt->SetRenderOrderChanged(true);
-			m_dmt->rwmutex.WUnlock();
-			this->m_dmt->semaphore->Release();
-			this->mutex.Unlock();
-		}
-		this->mutex.Unlock();
-		this->m_dmt->semaphore->Release();
-	}
-	void Cubism3UIComponent::DrawableMultiThread::SubThread::Cancel() {
-		this->WaitTillDone();
-		this->m_canceled = true;
-		this->Notify();
-	}
-
-	void Cubism3UIComponent::DrawableMultiThread::SubThread::WaitTillDone() {
-		this->mutex.Lock();
-		this->mutex.Unlock();
-	}
-	*/
-
-	///multithread alt
-	//limited number of threads, each thread updates a drawable.
-	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> *drawables, unsigned int limiter) : DrawableThreadBase(drawables) {
-		TLOG("[Cubism3] DMT - Multi Init Start.");
-		m_threads = new SubThread*[limiter];
-		this->numThreads = limiter;
-
-		for (int i = 0; i < limiter; i++) {
-			m_threads[i] = new SubThread(this);
-			m_threads[i]->Start();
-		}
-		TLOG("[Cubism3] DMT - Multi Init End.");
-	}
-	Cubism3UIComponent::DrawableMultiThread::~DrawableMultiThread() {
-		TLOG("[Cubism3] DMT - Multi Destroy Start.");
-		for (int i = 0; i < numThreads; i++) {
-			this->m_threads[i]->Cancel();
-			this->m_threads[i]->WaitTillReady();
-			this->m_threads[i]->WaitForThread();
-			delete this->m_threads[i];
-		}
-		delete this->m_threads;
-
-		this->Cancel();
-		this->WaitTillReady();
-		TLOG("[Cubism3] DMT - Multi Destroy End.");
-	}
-
-	void Cubism3UIComponent::DrawableMultiThread::Run() {
-		TLOG("[Cubism3] DMT - Run Start.");
-		while (!this->m_canceled) {
-			TLOG("[Cubism3] DMT - Waiting...");
-			this->Wait();
-			TLOG("[Cubism3] DMT - Running.");
-			this->mutex.Lock();
-			if (this->m_canceled) break;
-
-			this->rwmutex.WLock();
-			this->m_renderOrderChanged = false;
-			this->rwmutex.WUnlock();
-
-			this->dMutex.Lock();
-			this->nextDrawable = 0;
-			this->dMutex.Unlock();
-
-			csmUpdateModel(this->m_model);
-
-			for (int i = 0; i < numThreads; i++) this->m_threads[i]->Notify(); //wake up worker threads
-			for (int i = 0; i < numThreads; i++) this->m_threads[i]->WaitTillReady(); //wait until the worker threads are done
-
-			if (this->m_renderOrderChanged)
-				AZStd::sort(
-					this->m_drawables->begin(),
-					this->m_drawables->end(),
-					[](Drawable * a, Drawable * b) -> bool {
-						return a->renderOrder < b->renderOrder;
-					}
-				);
-
-			csmResetDrawableDynamicFlags(this->m_model);
-
-			this->mutex.Unlock();
-		}
-		this->mutex.Unlock();
-		TLOG("[Cubism3] DMT - Run End.");
-	}
-
-	bool Cubism3UIComponent::DrawableMultiThread::RenderOrderChanged() {
-		TLOG("[Cubism3] DMT - Render Order Changed Start.");
-		bool ret = false;
-		this->rwmutex.RLock();
-		ret = this->m_renderOrderChanged;
-		this->rwmutex.RUnlock();
-		return ret;
-		TLOG("[Cubism3] DMT - Render Order Changed End.");
-	}
-
-	Cubism3UIComponent::Drawable * Cubism3UIComponent::DrawableMultiThread::GetNextDrawable() {
-		TLOG("[Cubism3] DMT - GetNextDrawable Start.");
-		if (!this->m_canceled) {
-			if (this->nextDrawable >= this->m_drawables->size()) {
-				TLOG("[Cubism3] DMT - GetNextDrawable End - No Drawable.");
-				return nullptr;
-			}
-			Drawable * ret = this->m_drawables->at(this->nextDrawable);
-			this->nextDrawable++;
-			TLOG("[Cubism3] DMT - GetNextDrawable End - Has Drawable.");
-			return ret;
-		}
-		TLOG("[Cubism3] DMT - GetNextDrawable End - Canceled.");
-		return nullptr;
-	}
-
-	///multithread alt - sub thread
-	void Cubism3UIComponent::DrawableMultiThread::SubThread::Cancel() {
-		TLOG("[Cubism3] DMT - SubThread[%i] - Cancel Start.", this->m_threadId);
-		this->WaitTillReady();
-		this->m_canceled = true;
-		this->Notify();
-		TLOG("[Cubism3] DMT - SubThread[%i] - Cancel End.", this->m_threadId);
-	}
-	void Cubism3UIComponent::DrawableMultiThread::SubThread::Run(){
-		TLOG("[Cubism3] DMT - SubThread[%i] - Run Start.", this->m_threadId);
-		Drawable * d = nullptr;
-		while (!this->m_canceled) {
-			TLOG("[Cubism3] DMT - SubThread[%i] - Waiting...", this->m_threadId);
-			this->Wait();
-			TLOG("[Cubism3] DMT - SubThread[%i] - Running.", this->m_threadId);
-			this->mutex.Lock();
-			if (this->m_canceled) break;
-
-			d = nullptr;
-
-			//get first drawable to update
-			this->m_dmt->dMutex.Lock();
-			d = this->m_dmt->GetNextDrawable();
-			this->m_dmt->dMutex.Unlock();
-			while(d){
-				if (this->m_canceled) break;
-				bool renderOrderChanged = false;
-
-				//update the drawable
-				d->update(m_dmt->GetModel(), m_dmt->GetTransformUpdate(), renderOrderChanged);
-
-				m_dmt->rwmutex.WLock();
-				if (renderOrderChanged) this->m_dmt->SetRenderOrderChanged(true);
-				m_dmt->rwmutex.WUnlock();
-
-				//get next drawable to update
-				this->m_dmt->dMutex.Lock();
-				d = this->m_dmt->GetNextDrawable();
-				this->m_dmt->dMutex.Unlock();
-			}
-
-			if (this->m_canceled) break;
-			this->mutex.Unlock();
-		}
-		this->mutex.Unlock();
-		TLOG("[Cubism3] DMT - SubThread[%i] - Run End.", this->m_threadId);
-	}
-
-	void Cubism3UIComponent::DrawableMultiThread::SubThread::WaitTillReady() {
-		TLOG("[Cubism3] DMT - SubThread[%i] - Wait Start.", this->m_threadId);
-		this->mutex.Lock();
-		this->mutex.Unlock();
-		TLOG("[Cubism3] DMT - SubThread[%i] - Wait End.", this->m_threadId);
-	}
-	
-	//----------------------------------------------------------------------------------
-	//Model Parameters Stuff
-	void ModelParameter::InitEdit() {
-		this->ed.m_elementId = AZ::Edit::UIHandlers::Slider;
-		this->ed.m_name = this->name.c_str();
-		this->ed.m_description = this->name.c_str();
-		this->ed.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Max, aznew AZ::Edit::AttributeData<float>(this->max))); //parameter min
-		this->ed.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Min, aznew AZ::Edit::AttributeData<float>(this->min))); //parameter max
-	}
-
-	void ModelParameter::Reflect(AZ::SerializeContext* serializeContext) {
-		serializeContext->Class<ModelParameter>()->
-			Version(1)
-			->Field("id", &ModelParameter::id)
-			->Field("name", &ModelParameter::name)
-			->Field("value", &ModelParameter::val);
-	}
-
-	void ModelParametersGroup::Clear() {
-		if (this->m_params.size() != 0) {
-			this->m_params.clear(); //clear the parameters vector
-			this->m_idMap.clear(); //clear the parameters id map
-		}
-	}
-
-	void ModelParametersGroup::Reflect(AZ::SerializeContext* serializeContext) {
-		serializeContext->Class<ModelParametersGroup>()
-			->Field("Name", &ModelParametersGroup::m_name)
-			->Field("Params", &ModelParametersGroup::m_params);
-	}
-	//----------------------------------------------------------------------------------
-
-	//----------------------------------------------------------------------------------
-	//Model Parts Stuff
-	void ModelPart::InitEdit() {
-		this->ed.m_elementId = AZ::Edit::UIHandlers::Slider;
-		this->ed.m_name = this->name.c_str();
-		this->ed.m_description = this->name.c_str();
-		this->ed.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Max, aznew AZ::Edit::AttributeData<float>(1.0f))); //opacity min
-		this->ed.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Min, aznew AZ::Edit::AttributeData<float>(0.0f))); //opacity max
-	}
-
-	void ModelPart::Reflect(AZ::SerializeContext* serializeContext) {
-		serializeContext->Class<ModelPart>()->
-			Version(1)
-			->Field("id", &ModelPart::id)
-			->Field("name", &ModelPart::name)
-			->Field("value", &ModelPart::val);
-	}
-
-	void ModelPartsGroup::Clear() {
-		if (this->m_parts.size() != 0) {
-			this->m_parts.clear(); //clear the parameters vector
-			this->m_idMap.clear(); //clear the parameters id map
-		}
-	}
-
-	void ModelPartsGroup::Reflect(AZ::SerializeContext* serializeContext) {
-		serializeContext->Class<ModelPartsGroup>()
-			->Field("Name", &ModelPartsGroup::m_name)
-			->Field("Parts", &ModelPartsGroup::m_parts);
-	}
-	//----------------------------------------------------------------------------------
+	/*void Cubism3UIComponent::testMotionCN() {
+		Cubism3Animation animationTest(this->m_testMotion);
+	}*/
 }

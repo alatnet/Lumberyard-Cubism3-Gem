@@ -7,17 +7,24 @@
   },
   "auto": {
     "Include": [
-      "Include/Cubism3/Cubism3Bus.h",
       "Source/Live2DCubismCore.h",
       "Include/Cubism3/Cubism3UIBus.h"
     ],
     "Source": [
       "Source/Cubism3Module.cpp",
+      "Source/Cubism3Threading.cpp",
+      "Source/Cubism3Assets.h",
+      "Source/Cubism3Debug.h"
+    ],
+    "Source/Components": [
       "Source/Cubism3SystemComponent.cpp",
       "Source/Cubism3SystemComponent.h",
       "Source/Cubism3UIComponent.cpp",
-      "Source/Cubism3UIComponent.h",
-       "Source/Cubism3Assets.h"
+      "Source/Cubism3UIComponent.h"
+    ],
+    "Source/Editor": [
+      "Source/Cubism3EditorData.cpp",
+      "Source/Cubism3EditorData.h"
     ]
   }
 }  

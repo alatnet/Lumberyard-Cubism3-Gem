@@ -69,14 +69,11 @@ namespace Cubism3
 
     void Cubism3SystemComponent::Activate()
     {
-        Cubism3RequestBus::Handler::BusConnect();
-
 		RegisterComponentTypeForMenuOrdering(Cubism3UIComponent::RTTI_Type());
     }
 
     void Cubism3SystemComponent::Deactivate()
     {
-        Cubism3RequestBus::Handler::BusDisconnect();
     }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -18,126 +18,15 @@
 #include "../../Engine/LmbrCentral/include/LmbrCentral/Rendering/MaterialAsset.h"
 
 #include "Cubism3Assets.h"
+#include "Cubism3EditorData.h"
+#include "Cubism3Debug.h"
+#include "Cubism3Animation.h"
+#include "Cubism3Bus.h"
 #include <Cubism3/Cubism3UIBus.h>
 
 #include "Live2DCubismCore.h"
 
-#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-#include "Live2DCubismFramework.h"
-#include "Live2DCubismFrameworkInternal.h"
-#endif
-
-
-#ifdef ENABLE_CUBISM3_DEBUG
-	#ifdef ENABLE_CUBISM3_DEBUGLOG
-		#define CLOG(...) CryLog(__VA_ARGS__)
-	#else
-		#define CLOG(...)
-	#endif
-	#ifdef ENABLE_CUBISM3_THREADLOG
-		#define TLOG(...) CryLog(__VA_ARGS__)
-	#else
-		#define TLOG(...)
-	#endif
-#else
-	#define CLOG(...)
-	#define TLOG(...)
-#endif
-
 namespace Cubism3 {
-	class ModelParameter {
-	public:
-		AZ_RTTI(ModelParameter, "{F804F1A2-F3F5-4489-B326-2906F90FCB0F}");
-
-	public:
-		virtual ~ModelParameter() {}
-		AZStd::string name;
-		int id;
-		float min, max;
-		float *val;
-
-	public: //editor stuff
-		AZ::Edit::ElementData ed;
-		void InitEdit();
-
-	public: //RTTI stuff
-		static void Reflect(AZ::SerializeContext* serializeContext);
-	};
-
-	class ModelParametersGroup {
-	public:
-		AZ_TYPE_INFO(ModelParametersGroup, "{0C617BC0-697E-4BEA-856B-F56776D7C32B}");
-
-	public:
-		AZStd::string m_name;
-		AZStd::vector<ModelParameter*>  m_params;
-		AZStd::unordered_map<AZStd::string, int> m_idMap;
-
-		ModelParameter* at(unsigned int index) { return m_params.at(index); }
-		size_t size() { return this->m_params.size(); }
-
-		void Clear();
-
-		ModelParametersGroup() : m_name("Parameters") {}
-		~ModelParametersGroup() { Clear(); }
-
-		// Disallow copying, only moving
-		ModelParametersGroup(const ModelParametersGroup& rhs) = delete;
-		ModelParametersGroup& operator=(ModelParametersGroup&) = delete;
-
-		ModelParametersGroup(ModelParametersGroup&& rhs) { *this = AZStd::move(rhs); }
-		ModelParametersGroup& operator=(ModelParametersGroup&& rhs);
-
-	public:
-		static void Reflect(AZ::SerializeContext* serializeContext);
-	};
-
-	class ModelPart {
-	public:
-		AZ_RTTI(ModelPart, "{0E84D0AB-9ECF-4654-BD50-7D16D816C554}");
-
-	public:
-		virtual ~ModelPart() {}
-		AZStd::string name;
-		int id;
-		float *val;
-
-	public: //editor stuff
-		AZ::Edit::ElementData ed;
-		void InitEdit();
-
-	public: //RTTI stuff
-		static void Reflect(AZ::SerializeContext* serializeContext);
-	};
-
-	class ModelPartsGroup {
-	public:
-		AZ_TYPE_INFO(ModelPartsGroup, "{59D3B9A9-E175-40C4-896A-AD85C8DE7D4F}");
-
-	public:
-		AZStd::string m_name;
-		AZStd::vector<ModelPart*>  m_parts;
-		AZStd::unordered_map<AZStd::string, int> m_idMap;
-
-		ModelPart* at(unsigned int index) { return m_parts.at(index); }
-		size_t size() { return this->m_parts.size(); }
-
-		void Clear();
-
-		ModelPartsGroup() : m_name("Parts") {}
-		~ModelPartsGroup() { Clear(); }
-
-		// Disallow copying, only moving
-		ModelPartsGroup(const ModelPartsGroup& rhs) = delete;
-		ModelPartsGroup& operator=(ModelPartsGroup&) = delete;
-
-		ModelPartsGroup(ModelPartsGroup&& rhs) { *this = AZStd::move(rhs); }
-		ModelPartsGroup& operator=(ModelPartsGroup&& rhs);
-
-	public:
-		static void Reflect(AZ::SerializeContext* serializeContext);
-	};
-
 	class Cubism3UIComponent
 		: public AZ::Component
 		, public UiRenderBus::Handler
@@ -181,12 +70,8 @@ namespace Cubism3 {
 	private: //dynamic editor listing
 		static const AZ::Edit::ElementData* GetEditData(const void* handlerPtr, const void* elementPtr, const AZ::Uuid& elementType);
 		const AZ::Edit::ElementData* GetDataElement(const void* element, const AZ::Uuid& typeUuid) const;
-
-		struct ElementInfo {
-			AZ::Uuid m_uuid;                    // Type uuid for the class field that should use this edit data.
-			AZ::Edit::ElementData m_editData;   // Edit metadata (name, description, attribs, etc).
-		};
-		AZStd::unordered_map<const void*, ElementInfo> m_dataElements;
+		
+		AZStd::unordered_map<const void*, ElementInfo*> m_dataElements;
 
 	public:
 		// UiRenderInterface
@@ -230,9 +115,11 @@ namespace Cubism3 {
 		int GetPartCount();
 		int GetPartIdByName(AZStd::string name);
 		AZStd::string GetPartName(int index);
+
 		//parts by index
 		float GetPartOpacityI(int index);
 		void SetPartOpacityI(int index, float value);
+
 		//parts by name
 		float GetPartOpacityS(AZStd::string name);
 		void SetPartOpacityS(AZStd::string name, float value);
@@ -255,11 +142,6 @@ namespace Cubism3 {
 		void FreeTexture();
 		void LoadJson();
 		void FreeJson();
-
-		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-		void LoadAnimation();
-		void FreeAnimation();
-		#endif
 
 	private: //on change notifications
 		void OnMocFileChange();
@@ -297,36 +179,6 @@ namespace Cubism3 {
 
 		LoadType lType;
 
-	private: //animation stuff
-		#ifdef USE_CUBISM3_ANIM_FRAMEWORK
-		csmFloatSink* sink;
-		//void* sinkBuf;
-
-		/*struct animStruct {
-			csmAnimation* anim;
-			//void* buff;
-		};*/
-
-		typedef struct AnimationLayer {
-			/// Animation.
-			csmAnimation *Animation;
-
-			/// Animation state.
-			csmAnimationState State;
-
-			/// Blend function.
-			csmFloatBlendFunction Blend;
-
-			/// Blend weight.
-			float Weight;
-
-			///is the animation enabled
-			bool enabled;
-		} AnimationLayer;
-
-		AZStd::vector<AnimationLayer*> animations;
-		#endif
-
 	private: //asset stuff
 		AzFramework::SimpleAssetReference<MocAsset> m_mocPathname;
 		AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> m_imagePathname;
@@ -334,18 +186,13 @@ namespace Cubism3 {
 		AzFramework::SimpleAssetReference<Cubism3Asset> m_jsonPathname;
 		AZStd::vector<AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset>> m_imagesPathname;
 
-		//AZStd::vector<AzFramework::SimpleAssetReference<MotionAsset>> m_animationPathnames;
-		//AzFramework::SimpleAssetReference<MotionAsset> *m_AnimationPathname;
-
+		//AzFramework::SimpleAssetReference<MotionAsset> m_testMotion;
+		//void testMotionCN();
 	private: //parameter stuff
 		ModelParametersGroup params;
-		//AZStd::vector<ModelParameter*> parameters;
-		//AZStd::unordered_map<AZStd::string, int> parametersMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
 	private: //part stuff
 		ModelPartsGroup parts;
-		/*AZStd::vector<ModelPart*> parts;
-		AZStd::unordered_map<AZStd::string, int> partsMap;*/
 
 	private: //drawable stuff
 		AZ::Matrix4x4 transform, uvTransform, prevViewport;
@@ -503,12 +350,8 @@ namespace Cubism3 {
 
 	private: //masking stuff
 		bool enableMasking;
-		//bool drawMaskVisualBehindChildren;
-		//bool drawMaskVisualInFrontOfChildren;
 		bool useAlphaTest;
-		//bool maskInteraction;
 		int priorBaseState;
-		//Pass currPass;
 
 	#ifdef ENABLE_CUBISM3_DEBUG
 	private: //stencil stuff
