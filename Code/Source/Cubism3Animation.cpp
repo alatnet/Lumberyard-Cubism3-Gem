@@ -117,6 +117,7 @@ namespace Cubism3 {
 						CLOG("[Cubism3] - Target: %s", targetStr);
 					} else {
 						CLOG("[Cubism3] - Skipping %i. Target not found.", i);
+						delete c;
 						continue; //ignore this curve
 					}
 
@@ -134,6 +135,7 @@ namespace Cubism3 {
 						CLOG("[Cubism3] - ID: %s", c->idStr.c_str());
 					} else {
 						CLOG("[Cubism3] - Skipping %i. Id not found.", i);
+						delete c;
 						continue; //ignore this curve
 					}
 
@@ -239,6 +241,7 @@ namespace Cubism3 {
 						}
 					} else {
 						CLOG("[Cubism3] - Skipping %i. Segments not found.", i);
+						delete c;
 						continue; //ignore this curve
 					}
 
