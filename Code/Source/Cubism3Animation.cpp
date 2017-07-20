@@ -348,11 +348,11 @@ namespace Cubism3 {
 	}
 
 	bool Cubism3Animation::IsStopped() {
-		return this->m_playing && this->m_time == 0.0f;
+		return this->m_playing && (this->m_time == 0.0f || this->m_time == this->m_meta.duration);
 	}
 
 	bool Cubism3Animation::IsPaused() {
-		return this->m_playing && this->m_time != 0.0f;
+		return this->m_playing && (this->m_time != 0.0f || this->m_time != this->m_meta.duration);
 	}
 
 	void Cubism3Animation::Play() {
@@ -412,23 +412,11 @@ namespace Cubism3 {
 					//outside function?
 					break;
 				case Parameter:
-				{
-					/*ModelParameter**/ target = this->m_paramGroup->at(c->id);
-					//p->animMutex.Lock();
-					//p->animVal = this->m_floatBlendFunc(p->animVal, val, this->m_weight); //blend the animation
-					//p->animDirty = true;
-					//p->animMutex.Unlock();
+					target = this->m_paramGroup->at(c->id);
 					break;
-				}
 				case Part:
-				{
-					/*ModelPart**/ target = this->m_partsGroup->at(c->id);
-					//p->animMutex.Lock();
-					//p->animVal = this->m_floatBlendFunc(p->animVal, val, this->m_weight); //blend the animation
-					//p->animDirty = true;
-					//p->animMutex.Unlock();
+					target = this->m_partsGroup->at(c->id);
 					break;
-				}
 				}
 
 				if (target != nullptr) {
