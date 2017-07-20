@@ -2,10 +2,12 @@
 
 #include "Cubism3Debug.h"
 #include "Cubism3Assets.h"
-#include "Cubism3EditorData.h"
+//#include "Cubism3EditorData.h"
+#include "Include\Cubism3\Cubism3UIBus.h"
 
 namespace Cubism3 {
-	typedef float(*Cubism3AnimationFloatBlend)(float base, float value, float weight);
+	class ModelParametersGroup;
+	class ModelPartsGroup;
 
 	namespace FloatBlend {
 		float Default(float base, float value, float weight);
@@ -14,8 +16,14 @@ namespace Cubism3 {
 
 	class Cubism3Animation {
 	public:
-		Cubism3Animation(AzFramework::SimpleAssetReference<Cubism3::MotionAsset> asset);
+		AZ_RTTI(Cubism3Animation, "{C80B4CDB-8FB4-4E10-B098-6B88213B9F4A}");
+
+	public:
+		Cubism3Animation();
 		~Cubism3Animation();
+
+	public:
+		void Load(MotionAssetRef asset);
 
 	public:
 		bool Loaded() { return this->m_loaded; }
@@ -24,7 +32,28 @@ namespace Cubism3 {
 		void SetParametersAndParts(ModelParametersGroup * paramGroup, ModelPartsGroup * partsGroup);
 
 	public:
-		void SetFloatBlend(Cubism3AnimationFloatBlend floatBlendFunc) { m_floatBlendFunc = floatBlendFunc; }
+		void SetFloatBlend(Cubism3AnimationFloatBlend floatBlendFunc) { this->m_floatBlendFunc = floatBlendFunc; }
+		void SetWeight(float weight) { this->m_weight = weight; }
+		float GetWeight() { return this->m_weight; }
+
+	public:
+		bool IsPlaying();
+		bool IsStopped();
+		bool IsPaused();
+		bool IsLooping() { return this->m_meta.loop; }
+
+	public:
+		void Play();
+		void Stop();
+		void Pause();
+		void SetLooping(bool loop);
+
+	public:
+		void Tick(float delta);
+		void Reset();
+
+	private:
+		void UpdateCurves();
 
 	private:
 		bool m_loaded;
@@ -32,6 +61,12 @@ namespace Cubism3 {
 		ModelPartsGroup * m_partsGroup;
 
 		Cubism3AnimationFloatBlend m_floatBlendFunc;
+
+		float m_time;
+		float m_weight;
+		bool m_playedOnce;
+
+		bool m_playing;
 
 	private: //meta data
 		struct Meta {
@@ -95,5 +130,8 @@ namespace Cubism3 {
 		};
 
 		AZStd::vector<Curve *> m_curves;
+
+	public: //RTTI stuff
+		static void Reflect(AZ::SerializeContext* serializeContext);
 	};
 }

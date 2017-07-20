@@ -27,6 +27,10 @@ namespace Cubism3 {
 			return "*.motion3.json";
 		}
 	};
+
+	using MocAssetRef = AzFramework::SimpleAssetReference<MocAsset>;
+	using Cubism3AssetRef = AzFramework::SimpleAssetReference<Cubism3Asset>;
+	using MotionAssetRef = AzFramework::SimpleAssetReference<MotionAsset>;
 }
 
 namespace AZ {

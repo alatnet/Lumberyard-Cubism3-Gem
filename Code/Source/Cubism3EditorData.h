@@ -1,14 +1,25 @@
 #pragma once
 
+#include <CryThread.h>
 #include <AzCore/Serialization/SerializeContext.h>
+#include "Cubism3Animation.h"
 
 namespace Cubism3 {
 	struct ElementInfo {
 		AZ::Uuid m_uuid;                    // Type uuid for the class field that should use this edit data.
 		AZ::Edit::ElementData m_editData;   // Edit metadata (name, description, attribs, etc).
 	};
+	class ModelAnimation {
+	public: //animation stuff
+		float animVal;
+		bool animDirty;
+		CryMutex animMutex;
+	public:
+		virtual void SyncAnimation() = 0;
+	};
 
-	class ModelParameter {
+	//----------------------------------------------------------------------------
+	class ModelParameter : public ModelAnimation {
 	public:
 		AZ_RTTI(ModelParameter, "{F804F1A2-F3F5-4489-B326-2906F90FCB0F}");
 
@@ -19,6 +30,14 @@ namespace Cubism3 {
 		float min, max;
 		float *val;
 
+	/*public: //animation stuff
+		float animVal;
+		bool animDirty;
+		CryMutex animMutex;*/
+		
+	public:
+		void SyncAnimation();
+
 	public: //editor stuff
 		//AZ::Edit::ElementData ed;
 		ElementInfo ei;
@@ -26,6 +45,7 @@ namespace Cubism3 {
 
 	public: //RTTI stuff
 		static void Reflect(AZ::SerializeContext* serializeContext);
+		static void ReflectEdit(AZ::EditContext* ec);
 	};
 
 	class ModelParametersGroup {
@@ -42,6 +62,10 @@ namespace Cubism3 {
 		int find(AZStd::string name);
 
 		void Clear();
+		
+	public:
+		void SyncAnimations() { for (ModelParameter * p : this->m_params) if (p->animDirty) p->SyncAnimation(); }
+
 	public:
 		ModelParametersGroup() : m_name("Parameters") {}
 		~ModelParametersGroup() { Clear(); }
@@ -56,9 +80,10 @@ namespace Cubism3 {
 
 	public:
 		static void Reflect(AZ::SerializeContext* serializeContext);
+		static void ReflectEdit(AZ::EditContext* ec);
 	};
-
-	class ModelPart {
+	//----------------------------------------------------------------------------
+	class ModelPart : public ModelAnimation {
 	public:
 		AZ_RTTI(ModelPart, "{0E84D0AB-9ECF-4654-BD50-7D16D816C554}");
 
@@ -67,6 +92,12 @@ namespace Cubism3 {
 		AZStd::string name;
 		int id;
 		float *val;
+		/*float animVal;
+		bool animDirty;
+		CryMutex animMutex;*/
+
+	public:
+		void SyncAnimation();
 
 	public: //editor stuff
 		//AZ::Edit::ElementData ed;
@@ -75,6 +106,7 @@ namespace Cubism3 {
 
 	public: //RTTI stuff
 		static void Reflect(AZ::SerializeContext* serializeContext);
+		static void ReflectEdit(AZ::EditContext* ec);
 	};
 
 	class ModelPartsGroup {
@@ -92,9 +124,14 @@ namespace Cubism3 {
 
 		void Clear();
 
+	public:
+		void SyncAnimations() { for (ModelPart * p : this->m_parts) if (p->animDirty) p->SyncAnimation(); }
+
+	public:
 		ModelPartsGroup() : m_name("Parts") {}
 		~ModelPartsGroup() { Clear(); }
 
+	public:
 		// Disallow copying, only moving
 		ModelPartsGroup(const ModelPartsGroup& rhs) = delete;
 		ModelPartsGroup& operator=(ModelPartsGroup&) = delete;
@@ -104,5 +141,53 @@ namespace Cubism3 {
 
 	public:
 		static void Reflect(AZ::SerializeContext* serializeContext);
+		static void ReflectEdit(AZ::EditContext* ec);
+	};
+
+	//----------------------------------------------------------------------------
+	class AnimationControl {
+	public:
+		AZ_RTTI(AnimationControl, "{E61C4A2A-7E83-44A6-86E0-0E603FEC9FB4}");
+
+	public:
+		AnimationControl();
+
+	public:
+		AzFramework::SimpleAssetReference<MotionAsset> asset;
+		AZStd::string assetPath;
+		AZ::EntityId entId;
+
+	public:
+		void PlayPause();
+		void Stop();
+		void Reset();
+		void LoopCN();
+		void WeightCN();
+		void AssetCN();
+		void BlendingCN();
+
+	public:
+		void SetEntityID(AZ::EntityId id) { this->entId = id; }
+		bool IsLoaded() { return this->loaded; }
+
+	public:
+		bool loop;
+		float weight;
+		int blending;
+		bool pblank;
+		bool sblank;
+		bool rblank;
+
+		bool loaded;
+
+	private:
+		enum BlendFunc {
+			Default,
+			Additive
+		};
+
+	public: //RTTI stuff
+		static void Reflect(AZ::SerializeContext* serializeContext);
+		static void ReflectEdit(AZ::EditContext* ec);
 	};
 }

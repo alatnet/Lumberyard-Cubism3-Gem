@@ -5,14 +5,42 @@
 
 #include "Cubism3Animation.h"
 
+#include "Cubism3EditorData.h"
+
 namespace Cubism3 {
-	Cubism3Animation::Cubism3Animation(AzFramework::SimpleAssetReference<Cubism3::MotionAsset> asset) {
+	Cubism3Animation::Cubism3Animation() {
 		this->m_loaded = false;
 		this->m_paramGroup = nullptr;
 		this->m_partsGroup = nullptr;
 		this->m_floatBlendFunc = FloatBlend::Default;
-		if (asset.GetAssetPath().empty()) return;
+		this->m_time = 0.0f;
+		this->m_weight = 1.0f;
+		this->m_playedOnce = false;
+		this->m_playing = false;
+	}
 
+	Cubism3Animation::~Cubism3Animation() {
+		if (this->m_curves.size() > 0) {
+			for (Curve *c : this->m_curves) { //for each curve.
+				for (int i = 0; i < c->segments.size(); i++) delete c->segments[i].second; //delete the calculation for each segment
+				c->segments.clear(); //clear the segments
+			}
+			this->m_curves.clear();
+		}
+	}
+
+	void Cubism3Animation::Load(MotionAssetRef asset) {
+		this->m_loaded = false;
+
+		if (this->m_curves.size() > 0) {
+			for (Curve *c : this->m_curves) { //for each curve.
+				for (int i = 0; i < c->segments.size(); i++) delete c->segments[i].second; //delete the calculation for each segment
+				c->segments.clear(); //clear the segments
+			}
+			this->m_curves.clear();
+		}
+
+		if (asset.GetAssetPath().empty()) return;
 		CLOG("[Cubism3] Reading %s.", asset.GetAssetPath().c_str());
 
 		bool error = false;
@@ -269,22 +297,14 @@ namespace Cubism3 {
 		CLOG("[Cubism3] Number of Curves: %i", this->m_curves.size());
 		for (Curve * c : this->m_curves) {
 			CLOG("[Cubism3] Curve: %s", c->idStr.c_str());
-			CLOG("[Cubism3] - Target: %i" , c->target);
+			CLOG("[Cubism3] - Target: %i", c->target);
 			CLOG("[Cubism3] - Segments: %i", c->segments.size());
 
 			for (AZStd::pair<float, Calc *> s : c->segments) CLOG("[Cubism3] -- %f -> %i", s.first, s.second->getType());
 		}
 		#endif
-	}
 
-	Cubism3Animation::~Cubism3Animation() {
-		if (this->m_curves.size() > 0) {
-			for (Curve *c : this->m_curves) { //for each curve.
-				for (int i = 0; i < c->segments.size(); i++) delete c->segments[i].second; //delete the calculation for each segment
-				c->segments.clear(); //clear the segments
-			}
-			this->m_curves.clear();
-		}
+		this->SetParametersAndParts(this->m_paramGroup, this->m_partsGroup);
 	}
 
 	void Cubism3Animation::SetParametersAndParts(ModelParametersGroup * paramGroup, ModelPartsGroup * partsGroup){
@@ -318,6 +338,109 @@ namespace Cubism3 {
 		}
 	}
 
+	void Cubism3Animation::SetLooping(bool looping) {
+		this->m_meta.loop = looping;
+		this->m_playedOnce = false;
+	}
+
+	bool Cubism3Animation::IsPlaying() {
+		return this->m_playing;
+	}
+
+	bool Cubism3Animation::IsStopped() {
+		return this->m_playing && this->m_time == 0.0f;
+	}
+
+	bool Cubism3Animation::IsPaused() {
+		return this->m_playing && this->m_time != 0.0f;
+	}
+
+	void Cubism3Animation::Play() {
+		this->m_playing = true;
+		if (this->m_playedOnce) this->m_playedOnce = false;
+	}
+
+	void Cubism3Animation::Stop() {
+		this->m_playing = false;
+		this->m_playedOnce = false;
+		this->m_time = 0.0f;
+		this->UpdateCurves();
+	}
+
+	void Cubism3Animation::Pause() {
+		this->m_playing = false;
+	}
+
+	void Cubism3Animation::Tick(float delta) {
+		if (this->m_paramGroup == nullptr && this->m_partsGroup == nullptr) return; //if we dont have any parameters or parts to work with dont deal with the animation.
+
+		if (!this->m_playedOnce && this->m_playing) { //if we havent played once and we are playing
+			this->m_time += delta;
+
+			if (this->m_time > this->m_meta.duration) { //if we have exceded the animation time
+				if (!this->m_meta.loop) { //if we are not looping
+					this->m_playedOnce = true; //make sure that we dont loop
+					this->m_playing = false; //make sure we are stopped
+					this->m_time = 0.0f; //reset the time
+				} else while (this->m_time > this->m_meta.duration) { this->m_time -= this->m_meta.duration; } //trim the time
+			}
+
+			this->UpdateCurves();
+		}
+	}
+
+	void Cubism3Animation::Reset() {
+		this->m_time = 0.0f;
+		this->m_playedOnce = false;
+		this->UpdateCurves();
+	}
+
+	void Cubism3Animation::UpdateCurves() {
+		for (Curve * c : this->m_curves) { //for each curve
+			float val = 0.0f;
+			for (int i = c->segments.size() - 1; i >= 0; i--) { //for each segment
+				if (this->m_time > c->segments[i].first) { //find the keyframe that we are in
+					val = c->segments[i].second->calculate(this->m_time); //calculate the animation value
+					break;
+				}
+			}
+
+			if (c->id != -1) {
+				ModelAnimation * target = nullptr;
+				switch (c->target) {
+				case Model:
+					//outside function?
+					break;
+				case Parameter:
+				{
+					/*ModelParameter**/ target = this->m_paramGroup->at(c->id);
+					//p->animMutex.Lock();
+					//p->animVal = this->m_floatBlendFunc(p->animVal, val, this->m_weight); //blend the animation
+					//p->animDirty = true;
+					//p->animMutex.Unlock();
+					break;
+				}
+				case Part:
+				{
+					/*ModelPart**/ target = this->m_partsGroup->at(c->id);
+					//p->animMutex.Lock();
+					//p->animVal = this->m_floatBlendFunc(p->animVal, val, this->m_weight); //blend the animation
+					//p->animDirty = true;
+					//p->animMutex.Unlock();
+					break;
+				}
+				}
+
+				if (target != nullptr) {
+					target->animMutex.Lock();
+					target->animVal = this->m_floatBlendFunc(target->animVal, val, this->m_weight); //blend the animation
+					target->animDirty = true;
+					target->animMutex.Unlock();
+				}
+			}
+		}
+	}
+
 	float Cubism3Animation::Linear::calculate(float time) {
 		float t = (time - this->data[0].first) / (this->data[1].first - this->data[0].first);
 		return this->data[0].second + ((this->data[1].second - this->data[0].second) * t);
@@ -343,6 +466,11 @@ namespace Cubism3 {
 		p123 = Lerp(p12, p23, t);
 
 		return Lerp(p012,p123,t).second;
+	}
+
+	void Cubism3Animation::Reflect(AZ::SerializeContext* serializeContext) {
+		serializeContext->Class<Cubism3Animation>()
+			->SerializerForEmptyClass();
 	}
 
 	namespace FloatBlend {

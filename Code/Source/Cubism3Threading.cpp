@@ -18,6 +18,8 @@ namespace Cubism3 {
 		this->m_drawables = drawables;
 		this->m_renderOrderChanged = false;
 		this->m_canceled = false;
+		this->m_params = nullptr;
+		this->m_parts = nullptr;
 		TLOG("[Cubism3] DTB - Base Init End.");
 	}
 
@@ -31,8 +33,8 @@ namespace Cubism3 {
 
 	void Cubism3UIComponent::DrawableThreadBase::WaitTillReady() {
 		TLOG("[Cubism3] DTB - Base Wait Start.");
-		this->mutex.Lock();
-		this->mutex.Unlock();
+		this->Lock();
+		this->Unlock();
 		TLOG("[Cubism3] DTB - Base Wait End.");
 	}
 
@@ -43,9 +45,18 @@ namespace Cubism3 {
 			TLOG("[Cubism3] DST - Waiting...");
 			this->Wait();
 			TLOG("[Cubism3] DST - Running.");
-			this->mutex.Lock();
+			this->Lock();
 			if (this->m_canceled) break;
 			this->m_renderOrderChanged = false;
+
+			//update animation
+			for (AZStd::pair<AZStd::string, Cubism3Animation *> a : *this->m_animations) { a.second->Tick(this->m_delta); }
+			this->m_delta = 0.0f;
+
+			//sync animation
+			/*if (this->m_params) */this->m_params->SyncAnimations();
+			if (this->m_parts) this->m_parts->SyncAnimations();
+
 			csmUpdateModel(this->m_model);
 
 			for (Drawable* d : *m_drawables) d->update(this->m_model, this->m_transformUpdate, this->m_renderOrderChanged);
@@ -60,9 +71,9 @@ namespace Cubism3 {
 				);
 
 			csmResetDrawableDynamicFlags(this->m_model);
-			this->mutex.Unlock();
+			this->Unlock();
 		}
-		this->mutex.Unlock();
+		this->Unlock();
 		TLOG("[Cubism3] DST - Thread Run End.");
 	}
 
@@ -162,10 +173,10 @@ namespace Cubism3 {
 	//limited number of threads, each thread updates a drawable.
 	Cubism3UIComponent::DrawableMultiThread::DrawableMultiThread(AZStd::vector<Drawable*> *drawables, unsigned int limiter) : DrawableThreadBase(drawables) {
 		TLOG("[Cubism3] DMT - Multi Init Start.");
-		m_threads = new SubThread*[limiter];
-		this->numThreads = limiter;
+		m_threads = new SubThread*[limiter-1];
+		this->numThreads = limiter-1;
 
-		for (int i = 0; i < limiter; i++) {
+		for (int i = 0; i < limiter-1; i++) {
 			m_threads[i] = new SubThread(this);
 			m_threads[i]->Start();
 		}
@@ -192,7 +203,7 @@ namespace Cubism3 {
 			TLOG("[Cubism3] DMT - Waiting...");
 			this->Wait();
 			TLOG("[Cubism3] DMT - Running.");
-			this->mutex.Lock();
+			this->Lock();
 			if (this->m_canceled) break;
 
 			this->rwmutex.WLock();
@@ -203,9 +214,41 @@ namespace Cubism3 {
 			this->nextDrawable = 0;
 			this->dMutex.Unlock();
 
+			//update and sync animations
+			for (AZStd::pair<AZStd::string, Cubism3Animation *> a : *this->m_animations) { a.second->Tick(this->m_delta); }
+			this->m_delta = 0.0f;
+			this->m_params->SyncAnimations();
+			this->m_parts->SyncAnimations();
+			//this->animations = false;
+
+			//update the model
 			csmUpdateModel(this->m_model);
 
+			//update drawables
 			for (int i = 0; i < numThreads; i++) this->m_threads[i]->Notify(); //wake up worker threads
+
+			{ //assist with updating drawables
+				Drawable * d = nullptr;
+				if (this->m_canceled) break;
+
+				//get first drawable to update
+				d = this->GetNextDrawable();
+				while (d) {
+					if (this->m_canceled) break;
+					bool renderOrderChanged = false;
+
+					//update the drawable
+					d->update(this->GetModel(), this->GetTransformUpdate(), renderOrderChanged);
+
+					this->rwmutex.WLock();
+					if (renderOrderChanged) this->SetRenderOrderChanged(true);
+					this->rwmutex.WUnlock();
+
+					//get next drawable to update
+					d = this->GetNextDrawable();
+				}
+			}
+
 			for (int i = 0; i < numThreads; i++) this->m_threads[i]->WaitTillReady(); //wait until the worker threads are done
 
 			if (this->m_renderOrderChanged)
@@ -219,9 +262,9 @@ namespace Cubism3 {
 
 			csmResetDrawableDynamicFlags(this->m_model);
 
-			this->mutex.Unlock();
+			this->Unlock();
 		}
-		this->mutex.Unlock();
+		this->Unlock();
 		TLOG("[Cubism3] DMT - Run End.");
 	}
 
@@ -236,20 +279,59 @@ namespace Cubism3 {
 	}
 
 	Cubism3UIComponent::Drawable * Cubism3UIComponent::DrawableMultiThread::GetNextDrawable() {
+		if (this->m_drawables->size() == 0) return nullptr;
+
+		/*this->dMutex.Lock();
+		if (!this->m_canceled) {
+			if (this->drawableIt == this->m_drawables->end()) {
+				this->dMutex.Unlock();
+				return nullptr;
+			}
+			Cubism3UIComponent::Drawable * ret = *this->drawableIt;
+			this->drawableIt++;
+			this->dMutex.Unlock();
+			return ret;
+		}
+		this->dMutex.Unlock();
+		return nullptr;*/
+
 		TLOG("[Cubism3] DMT - GetNextDrawable Start.");
+		this->dMutex.Lock();
 		if (!this->m_canceled) {
 			if (this->nextDrawable >= this->m_drawables->size()) {
 				TLOG("[Cubism3] DMT - GetNextDrawable End - No Drawable.");
+				this->dMutex.Unlock();
 				return nullptr;
 			}
 			Drawable * ret = this->m_drawables->at(this->nextDrawable);
 			this->nextDrawable++;
 			TLOG("[Cubism3] DMT - GetNextDrawable End - Has Drawable.");
+			this->dMutex.Unlock();
 			return ret;
 		}
 		TLOG("[Cubism3] DMT - GetNextDrawable End - Canceled.");
+		this->dMutex.Unlock();
 		return nullptr;
 	}
+
+	/*Cubism3Animation * Cubism3UIComponent::DrawableMultiThread::GetNextAnimation() {
+		if (this->m_animations->size() == 0) return nullptr;
+
+		this->dMutex.Lock();
+		if (!this->m_canceled) {
+			if (this->animIt == this->m_animations->end()) {
+				this->dMutex.Unlock();
+				return nullptr; //while we are not at the end of the list
+			}
+			AZStd::pair<AZStd::string, Cubism3Animation*> pair = *this->animIt;
+			Cubism3Animation * ret = pair.second; //get the animation
+			this->animIt++; //update the iterator
+			this->dMutex.Unlock();
+			return ret; //return the animation
+		}
+		this->dMutex.Unlock();
+		return nullptr;
+	}*/
 
 	///multithread alt - sub thread
 	void Cubism3UIComponent::DrawableMultiThread::SubThread::Cancel() {
@@ -259,6 +341,7 @@ namespace Cubism3 {
 		this->Notify();
 		TLOG("[Cubism3] DMT - SubThread[%i] - Cancel End.", this->m_threadId);
 	}
+
 	void Cubism3UIComponent::DrawableMultiThread::SubThread::Run() {
 		TLOG("[Cubism3] DMT - SubThread[%i] - Run Start.", this->m_threadId);
 		Drawable * d = nullptr;
@@ -266,15 +349,12 @@ namespace Cubism3 {
 			TLOG("[Cubism3] DMT - SubThread[%i] - Waiting...", this->m_threadId);
 			this->Wait();
 			TLOG("[Cubism3] DMT - SubThread[%i] - Running.", this->m_threadId);
-			this->mutex.Lock();
+
+			this->Lock();
 			if (this->m_canceled) break;
 
-			d = nullptr;
-
 			//get first drawable to update
-			this->m_dmt->dMutex.Lock();
 			d = this->m_dmt->GetNextDrawable();
-			this->m_dmt->dMutex.Unlock();
 			while (d) {
 				if (this->m_canceled) break;
 				bool renderOrderChanged = false;
@@ -287,22 +367,20 @@ namespace Cubism3 {
 				m_dmt->rwmutex.WUnlock();
 
 				//get next drawable to update
-				this->m_dmt->dMutex.Lock();
 				d = this->m_dmt->GetNextDrawable();
-				this->m_dmt->dMutex.Unlock();
 			}
 
 			if (this->m_canceled) break;
-			this->mutex.Unlock();
+			this->Unlock();
 		}
-		this->mutex.Unlock();
+		this->Unlock();
 		TLOG("[Cubism3] DMT - SubThread[%i] - Run End.", this->m_threadId);
 	}
 
 	void Cubism3UIComponent::DrawableMultiThread::SubThread::WaitTillReady() {
 		TLOG("[Cubism3] DMT - SubThread[%i] - Wait Start.", this->m_threadId);
-		this->mutex.Lock();
-		this->mutex.Unlock();
+		this->Lock();
+		this->Unlock();
 		TLOG("[Cubism3] DMT - SubThread[%i] - Wait End.", this->m_threadId);
 	}
 }

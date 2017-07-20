@@ -8,15 +8,21 @@ Place the SDK\'s develop and release library files in "3rdParty" folder and the 
 ## How to have asset listing
 In order to have the editor list Cubism3 assets you will need to add the following to your "Amazon/Lumberyard/\<version\>/dev/AssetProcessorPlatformConfig.ini":  
 ```Text
-; Copy Moc Files
-[RC Cubism3]
+; Copy Cubism3 Moc3 Files
+[RC Cubism3_Moc]
 glob=*.moc3
 params=copy
 productAssetType={7DB33C8B-8498-404C-A301-B0269AE60388}
 
-; Copy Model3 Files
+; Copy Cubism3 Model3 Files
 [RC Cubism3_Model3]
 glob=*.model3.json
 params=copy
 productAssetType={A679F1C0-60A1-48FB-8107-A68195D76CF2}
+
+; Copy Cubism3 Motion3 Files
+[RC Cubism3_Motion3]
+glob=*.motion3.json
+params=copy
+productAssetType={DC1BA430-5D5E-4A09-BA5F-1FB05180C6A1}
 ```

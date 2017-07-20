@@ -74,4 +74,42 @@ namespace Cubism3 {
 		static const AZ::EBusHandlerPolicy HandlerPolicy = AZ::EBusHandlerPolicy::Single;
 	};
 	using Cubism3UIBus = AZ::EBus<Cubism3UIInterface>;
+	
+	typedef float(*Cubism3AnimationFloatBlend)(float base, float value, float weight);
+
+	class Cubism3AnimationInterface
+		: public AZ::ComponentBus {
+	public:
+		virtual bool AddAnimation(AZStd::string path) = 0; //animation path is also it's id/name.
+		virtual void RemoveAnimation(AZStd::string name) = 0;
+	public:
+		virtual bool Loaded(AZStd::string name) = 0;
+
+	public:
+		virtual void Play(AZStd::string name) = 0;
+		virtual void Stop(AZStd::string name) = 0;
+		virtual void Pause(AZStd::string name) = 0;
+		virtual void SetLooping(AZStd::string name, bool loop) = 0;
+
+	public:
+		virtual bool IsPlaying(AZStd::string name) = 0;
+		virtual bool IsStopped(AZStd::string name) = 0;
+		virtual bool IsPaused(AZStd::string name) = 0;
+		virtual bool IsLooping(AZStd::string name) = 0;
+
+	public:
+		virtual void Reset(AZStd::string name) = 0;
+
+	public:
+		virtual void SetWeight(AZStd::string name, float weight) = 0;
+		virtual float GetWeight(AZStd::string name) = 0;
+
+	public:
+		virtual void SetFloatBlend(AZStd::string name, Cubism3AnimationFloatBlend floatBlendFunc) = 0;
+
+	public:
+		static const AZ::EBusHandlerPolicy HandlerPolicy = AZ::EBusHandlerPolicy::Single;
+	};
+
+	using Cubism3AnimationBus = AZ::EBus<Cubism3AnimationInterface>;
 } // namespace Cubism3

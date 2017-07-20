@@ -31,6 +31,7 @@ namespace Cubism3 {
 		: public AZ::Component
 		, public UiRenderBus::Handler
 		, public Cubism3UIBus::Handler
+		, public Cubism3AnimationBus::Handler
 	{
 
 	public:
@@ -130,6 +131,27 @@ namespace Cubism3 {
 		void SetMultiThreadLimiter(unsigned int limiter);
 		unsigned int GetMultiThreadLimiter() { return this->threadLimiter; }
 		// ~Cubism3UIBus
+
+	public:
+		// Cubism3AnimationBus
+		bool AddAnimation(AZStd::string path);
+		void RemoveAnimation(AZStd::string name);
+		bool Loaded(AZStd::string name);
+		void Play(AZStd::string name);
+		void Stop(AZStd::string name);
+		void Pause(AZStd::string name);
+		void SetLooping(AZStd::string name, bool loop);
+		bool IsPlaying(AZStd::string name);
+		bool IsStopped(AZStd::string name);
+		bool IsPaused(AZStd::string name);
+		bool IsLooping(AZStd::string name);
+		void Reset(AZStd::string name);
+		void SetWeight(AZStd::string name, float weight);
+		float GetWeight(AZStd::string name);
+		void SetFloatBlend(AZStd::string name, Cubism3AnimationFloatBlend floatBlendFunc);
+		// ~Cubism3AnimationBus
+	private:
+		Cubism3Animation * FindAnim(AZStd::string name);
 		
 	private:
 		void LoadObject();
@@ -180,14 +202,17 @@ namespace Cubism3 {
 		LoadType lType;
 
 	private: //asset stuff
-		AzFramework::SimpleAssetReference<MocAsset> m_mocPathname;
+		MocAssetRef m_mocPathname;
 		AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset> m_imagePathname;
 		
-		AzFramework::SimpleAssetReference<Cubism3Asset> m_jsonPathname;
+		Cubism3AssetRef m_jsonPathname;
 		AZStd::vector<AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset>> m_imagesPathname;
 
-		//AzFramework::SimpleAssetReference<MotionAsset> m_testMotion;
-		//void testMotionCN();
+	private: //animations stuff
+		AZStd::unordered_map<AZStd::string, Cubism3Animation*> animations;
+		AZStd::vector<AnimationControl> animControls;
+		void animControlsChangeNotify();
+
 	private: //parameter stuff
 		ModelParametersGroup params;
 
@@ -252,6 +277,12 @@ namespace Cubism3 {
 			csmModel * GetModel() { return this->m_model; }
 			void SetTransformUpdate(bool update) { this->m_transformUpdate = update; }
 			bool GetTransformUpdate() { return this->m_transformUpdate; }
+		public: //animations stuff
+			void SetDelta(float delta) { this->m_delta = delta; }
+			float GetDelta() { return this->m_delta; }
+			void SetAnimations(AZStd::unordered_map<AZStd::string, Cubism3Animation*> *animations) { this->m_animations = animations; }
+			void SetParams(ModelParametersGroup * params) { this->m_params = params; }
+			void SetParts(ModelPartsGroup * parts) { this->m_parts = parts; }
 		public:
 			virtual bool RenderOrderChanged() { return this->m_renderOrderChanged; }
 			virtual void SetRenderOrderChanged(bool changed) { this->m_renderOrderChanged = changed; }
@@ -265,9 +296,13 @@ namespace Cubism3 {
 			AZStd::vector<Drawable*> *m_drawables;
 			csmModel * m_model;
 			bool m_transformUpdate;
+		protected: //animations stuff
+			float m_delta;
+			AZStd::unordered_map<AZStd::string, Cubism3Animation*> *m_animations;
+			ModelParametersGroup * m_params;
+			ModelPartsGroup * m_parts;
 		protected:
 			bool m_canceled;
-			CryMutex mutex;
 		};
 
 		//one thread to rule them all.
@@ -331,16 +366,16 @@ namespace Cubism3 {
 			public:
 				void WaitTillReady();
 			private:
-				CryMutex mutex;
 				DrawableMultiThread *m_dmt;
 				bool m_canceled;
 			};
+		protected:
+			bool animations;
 		private:
 			SubThread ** m_threads;
 			unsigned int numThreads;
 			CryRWLock rwmutex;
 			CryMutex dMutex;
-			AZStd::vector<Drawable*> *drawables;
 			unsigned int nextDrawable;
 		};
 
