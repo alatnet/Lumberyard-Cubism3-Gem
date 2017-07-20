@@ -71,6 +71,8 @@ namespace Cubism3 {
 
 	Cubism3UIComponent::~Cubism3UIComponent() {
 		this->ReleaseObject();
+		for (AZStd::pair<AZStd::string, Cubism3Animation*> a : this->animations) delete a.second;
+		this->animations.clear();
 	}
 
 	void Cubism3UIComponent::Init() {
@@ -803,44 +805,79 @@ namespace Cubism3 {
 
 					//get the parameters of the model
 					const char** paramNames = csmGetParameterIds(this->model);
+					if (this->params.size() == 0) { //if it's a brand new component
+						for (int i = 0; i < csmGetParameterCount(this->model); i++) {
+							ModelParameter * p = new ModelParameter;
+							p->id = i;
+							p->name = AZStd::string(paramNames[i]);
+							p->min = csmGetParameterMinimumValues(this->model)[i];
+							p->max = csmGetParameterMaximumValues(this->model)[i];
+							p->val = &csmGetParameterValues(this->model)[i];
+							p->animVal = *p->val;
+							p->animDirty = false;
 
-					for (int i = 0; i < csmGetParameterCount(this->model); i++) {
-						ModelParameter * p = new ModelParameter;
-						p->id = i;
-						p->name = AZStd::string(paramNames[i]);
-						p->min = csmGetParameterMinimumValues(this->model)[i];
-						p->max = csmGetParameterMaximumValues(this->model)[i];
-						p->val = &csmGetParameterValues(this->model)[i];
-						p->animVal = *p->val;
-						p->animDirty = false;
+							this->params.m_params.push_back(p);
+							this->params.m_idMap[p->name] = p->id;
 
-						this->params.m_params.push_back(p);
-						this->params.m_idMap[p->name] = p->id;
+							//editor data
+							p->InitEdit();
+							this->m_dataElements.insert(AZStd::make_pair(p->val, &p->ei));
+						}
+						this->params.m_params.shrink_to_fit(); //free up unused memory
+					} else { //if we are loading a component
+						for (int i = 0; i < this->params.size(); i++) {
+							ModelParameter * p = this->params.at(i);
+							this->params.m_idMap[p->name] = p->id;
+							p->min = csmGetParameterMinimumValues(this->model)[p->id];
+							p->max = csmGetParameterMaximumValues(this->model)[p->id];
+							float savedVal = *p->val;
+							p->val = &csmGetParameterValues(this->model)[i];
+							*p->val = savedVal;
+							p->animVal = savedVal;
+							p->animDirty = false;
 
-						//editor data
-						p->InitEdit();
-						this->m_dataElements.insert(AZStd::make_pair(p->val, &p->ei));
+							//editor data
+							p->InitEdit();
+							this->m_dataElements.insert(AZStd::make_pair(p->val, &p->ei));
+						}
+						this->params.m_params.shrink_to_fit(); //free up unused memory
 					}
-					this->params.m_params.shrink_to_fit(); //free up unused memory
 
 					//get the parts of the model
 					const char** partsNames = csmGetPartIds(this->model);
-					for (int i = 0; i < csmGetPartCount(this->model); i++) {
-						ModelPart * p = new ModelPart;
-						p->id = i;
-						p->name = AZStd::string(partsNames[i]);
-						p->val = &csmGetPartOpacities(this->model)[i];
-						p->animVal = *p->val;
-						p->animDirty = false;
+					if (this->parts.size() == 0) { //if it's a brand new component
+						for (int i = 0; i < csmGetPartCount(this->model); i++) {
+							ModelPart * p = new ModelPart;
+							p->id = i;
+							p->name = AZStd::string(partsNames[i]);
+							p->val = &csmGetPartOpacities(this->model)[i];
+							p->animVal = *p->val;
+							p->animDirty = false;
 
-						this->parts.m_parts.push_back(p);
-						this->parts.m_idMap[p->name] = p->id;
+							this->parts.m_parts.push_back(p);
+							this->parts.m_idMap[p->name] = p->id;
 
-						//editor data
-						p->InitEdit();
-						this->m_dataElements.insert(AZStd::make_pair(p->val, &p->ei));
+							//editor data
+							p->InitEdit();
+							this->m_dataElements.insert(AZStd::make_pair(p->val, &p->ei));
+						}
+						this->parts.m_parts.shrink_to_fit(); //free up unused memory
+					} else { //if we are loading a component
+						for (int i = 0; i < this->parts.size(); i++) {
+							ModelPart * p = this->parts.at(i);
+							this->parts.m_idMap[p->name] = p->id;
+							float savedVal = *p->val;
+							p->val = &csmGetPartOpacities(this->model)[i];
+							*p->val = savedVal;
+							p->animVal = savedVal;
+							p->animDirty = false;
+
+							//editor data
+							p->InitEdit();
+							this->m_dataElements.insert(AZStd::make_pair(p->val, &p->ei));
+						}
+						this->parts.m_parts.shrink_to_fit(); //free up unused memory
 					}
-					this->parts.m_parts.shrink_to_fit();
 
 					//load drawable data
 					const char** drawableNames = csmGetDrawableIds(this->model);
