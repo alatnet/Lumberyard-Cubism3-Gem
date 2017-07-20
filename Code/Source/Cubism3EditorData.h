@@ -145,6 +145,8 @@ namespace Cubism3 {
 	};
 
 	//----------------------------------------------------------------------------
+	class Cubism3UIComponent;
+
 	class AnimationControl {
 	public:
 		AZ_RTTI(AnimationControl, "{E61C4A2A-7E83-44A6-86E0-0E603FEC9FB4}");
@@ -155,7 +157,8 @@ namespace Cubism3 {
 	public:
 		AzFramework::SimpleAssetReference<MotionAsset> asset;
 		AZStd::string assetPath;
-		AZ::EntityId entId;
+		//AZ::EntityId entId;
+		Cubism3UIComponent * m_component;
 
 	public:
 		void PlayPause();
@@ -167,7 +170,8 @@ namespace Cubism3 {
 		void BlendingCN();
 
 	public:
-		void SetEntityID(AZ::EntityId id) { this->entId = id; }
+		//void SetEntityID(AZ::EntityId id) { this->entId = id; }
+		void SetUIComponent(Cubism3UIComponent * component) { this->m_component = component; }
 		bool IsLoaded() { return this->loaded; }
 
 	public:

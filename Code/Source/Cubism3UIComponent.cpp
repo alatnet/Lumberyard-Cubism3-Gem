@@ -74,8 +74,9 @@ namespace Cubism3 {
 	}
 
 	void Cubism3UIComponent::Init() {
-		for (AnimationControl a : this->animControls) a.SetEntityID(this->m_entity->GetId());
-		this->LoadObject();
+		//for (AnimationControl a : this->animControls) a.SetEntityID(this->m_entity->GetId());
+		for (AnimationControl a : this->animControls) a.SetUIComponent(this);
+		if (!this->modelLoaded) this->LoadObject();
 	}
 
 	void Cubism3UIComponent::Activate() {
@@ -388,7 +389,8 @@ namespace Cubism3 {
 	}
 
 	void Cubism3UIComponent::animControlsChangeNotify() {
-		this->animControls.at(this->animControls.size() - 1).SetEntityID(this->m_entity->GetId());
+		//this->animControls.at(this->animControls.size() - 1).SetEntityID(this->m_entity->GetId());
+		this->animControls.at(this->animControls.size() - 1).SetUIComponent(this);
 	}
 
 	//dynamic listing stuff

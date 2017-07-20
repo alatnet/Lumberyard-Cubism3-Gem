@@ -6,6 +6,8 @@
 #include "Cubism3EditorData.h"
 #include "Cubism3\Cubism3UIBus.h"
 
+#include "Cubism3UIComponent.h"
+
 namespace Cubism3 {
 	//----------------------------------------------------------------------------------
 	//Model Parameters Stuff
@@ -134,45 +136,72 @@ namespace Cubism3 {
 		this->assetPath = "";
 		this->loaded = false;
 
+		this->m_component = nullptr;
+
 		this->pblank = this->sblank = this->rblank = false;
 	}
 
 	void AnimationControl::PlayPause() {
-		if (this->entId.IsValid() && this->loaded) {
+		/*if (this->entId.IsValid() && this->loaded) {
 			bool isPlaying = false;
 			EBUS_EVENT_ID_RESULT(isPlaying, this->entId, Cubism3AnimationBus, IsPlaying, this->assetPath);
 
 			if (isPlaying) EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Pause, this->assetPath);
 			else EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Play, this->assetPath);
+		}*/
+
+		if (this->m_component) {
+			if (this->m_component->IsPlaying(this->assetPath)) this->m_component->Pause(this->assetPath);
+			else this->m_component->Play(this->assetPath);
 		}
 	}
 
 	void AnimationControl::Stop() {
-		if (this->entId.IsValid() && this->loaded)
-			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Stop, this->assetPath);
+		/*if (this->entId.IsValid() && this->loaded)
+			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Stop, this->assetPath);*/
+
+		if (this->m_component) this->m_component->Stop(this->assetPath);
 	}
 
 	void AnimationControl::Reset() {
-		if (this->entId.IsValid() && this->loaded)
-			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Reset, this->assetPath);
+		/*if (this->entId.IsValid() && this->loaded)
+			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Reset, this->assetPath);*/
+
+		if (this->m_component) this->m_component->Reset(this->assetPath);
 	}
 
 	void AnimationControl::LoopCN() {
-		if (this->entId.IsValid() && this->loaded)
-			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetLooping, this->assetPath, this->loop);
+		/*if (this->entId.IsValid() && this->loaded)
+			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetLooping, this->assetPath, this->loop);*/
+
+		if (this->m_component) this->m_component->SetLooping(this->assetPath, this->loop);
 	}
 
 	void AnimationControl::WeightCN() {
-		if (this->entId.IsValid() && this->loaded)
-			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetWeight, this->assetPath, this->weight);
+		/*if (this->entId.IsValid() && this->loaded)
+			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetWeight, this->assetPath, this->weight);*/
+
+		if (this->m_component) this->m_component->SetWeight(this->assetPath, this->weight);
 	}
 
 	void AnimationControl::AssetCN() {
-		if (this->entId.IsValid()) {
+		/*if (this->entId.IsValid()) {
 			if (!this->asset.GetAssetPath().empty()) {
 				this->assetPath = this->asset.GetAssetPath();
 				EBUS_EVENT_ID_RESULT(this->loaded, this->entId, Cubism3AnimationBus, AddAnimation, this->assetPath);
 				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetLooping, this->assetPath, this->loop);
+				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetWeight, this->assetPath, this->weight);
+
+				switch (this->blending) {
+				case 0:
+					if (this->entId.IsValid() && this->loaded)
+						EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetFloatBlend, this->assetPath, Cubism3::FloatBlend::Default);
+					break;
+				case 1:
+					if (this->entId.IsValid() && this->loaded)
+						EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetFloatBlend, this->assetPath, Cubism3::FloatBlend::Additive);
+					break;
+				}
 
 				if (this->loaded)
 					CLOG("[Cubism3] Animation Asset Loaded. - %s", this->assetPath.c_str());
@@ -183,11 +212,38 @@ namespace Cubism3 {
 				this->assetPath = "";
 				this->loaded = false;
 			}
+		}*/
+
+		if (this->m_component) {
+			if (!this->asset.GetAssetPath().empty()) {
+				this->assetPath = this->asset.GetAssetPath();
+
+				this->loaded = this->m_component->AddAnimation(this->assetPath);
+				this->m_component->SetLooping(this->assetPath, this->loop);
+				this->m_component->SetWeight(this->assetPath, this->weight);
+				switch (this->blending) {
+				case 0:
+					this->m_component->SetFloatBlend(this->assetPath, Cubism3::FloatBlend::Default);
+					break;
+				case 1:
+					this->m_component->SetFloatBlend(this->assetPath, Cubism3::FloatBlend::Additive);
+					break;
+				}
+
+				if (this->loaded)
+					CLOG("[Cubism3] Animation Asset Loaded. - %s", this->assetPath.c_str());
+				else
+					CLOG("[Cubism3] Animation Asset did not load. - %s", this->assetPath.c_str());
+			} else {
+				this->m_component->RemoveAnimation(this->assetPath);
+				this->assetPath = "";
+				this->loaded = false;
+			}
 		}
 	}
 
 	void AnimationControl::BlendingCN() {
-		switch (this->blending) {
+		/*switch (this->blending) {
 		case 0:
 			if (this->entId.IsValid() && this->loaded)
 				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetFloatBlend, this->assetPath, Cubism3::FloatBlend::Default);
@@ -195,6 +251,15 @@ namespace Cubism3 {
 		case 1:
 			if (this->entId.IsValid() && this->loaded)
 				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetFloatBlend, this->assetPath, Cubism3::FloatBlend::Additive);
+			break;
+		}*/
+		
+		switch (this->blending) {
+		case 0:
+			this->m_component->SetFloatBlend(this->assetPath, Cubism3::FloatBlend::Default);
+			break;
+		case 1:
+			this->m_component->SetFloatBlend(this->assetPath, Cubism3::FloatBlend::Additive);
 			break;
 		}
 	}
