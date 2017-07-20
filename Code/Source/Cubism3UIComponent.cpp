@@ -76,7 +76,7 @@ namespace Cubism3 {
 	void Cubism3UIComponent::Init() {
 		//for (AnimationControl a : this->animControls) a.SetEntityID(this->m_entity->GetId());
 		for (AnimationControl a : this->animControls) a.SetUIComponent(this);
-		if (!this->modelLoaded) this->LoadObject();
+		this->LoadObject();
 	}
 
 	void Cubism3UIComponent::Activate() {
@@ -114,8 +114,6 @@ namespace Cubism3 {
 				->Field("Masking_Alpha", &Cubism3UIComponent::useAlphaTest)
 				->Field("Params", &Cubism3UIComponent::params)
 				->Field("Parts", &Cubism3UIComponent::parts)
-
-				//->Field("animations", &Cubism3UIComponent::animations)
 				->Field("animControls", &Cubism3UIComponent::animControls)
 
 				#ifdef ENABLE_CUBISM3_DEBUG

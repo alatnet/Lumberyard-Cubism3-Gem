@@ -381,7 +381,7 @@ namespace Cubism3 {
 				if (!this->m_meta.loop) { //if we are not looping
 					this->m_playedOnce = true; //make sure that we dont loop
 					this->m_playing = false; //make sure we are stopped
-					this->m_time = 0.0f; //reset the time
+					this->m_time = this->m_meta.duration; //stop at the end of the animation
 				} else while (this->m_time > this->m_meta.duration) { this->m_time -= this->m_meta.duration; } //trim the time
 			}
 
