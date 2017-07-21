@@ -1,8 +1,0 @@
-{
-  "auto": {
-    "Source/Animation": [
-      "Source/Cubism3Animation.cpp",
-      "Source/Cubism3Animation.h"
-    ]
-  }
-}

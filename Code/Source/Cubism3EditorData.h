@@ -11,9 +11,9 @@ namespace Cubism3 {
 	};
 	class ModelAnimation {
 	public: //animation stuff
-		float animVal;
-		bool animDirty;
-		CryMutex animMutex;
+		float m_animVal;
+		bool m_animDirty;
+		CryMutex m_animMutex;
 	public:
 		virtual void SyncAnimation() = 0;
 	};
@@ -25,22 +25,17 @@ namespace Cubism3 {
 
 	public:
 		virtual ~ModelParameter() {}
-		AZStd::string name;
-		int id;
-		float min, max;
-		float *val;
-
-	/*public: //animation stuff
-		float animVal;
-		bool animDirty;
-		CryMutex animMutex;*/
+		AZStd::string m_name;
+		int m_id;
+		float m_min, m_max;
+		float *m_val;
 		
 	public:
 		void SyncAnimation();
 
 	public: //editor stuff
 		//AZ::Edit::ElementData ed;
-		ElementInfo ei;
+		ElementInfo m_ei;
 		void InitEdit();
 
 	public: //RTTI stuff
@@ -54,7 +49,7 @@ namespace Cubism3 {
 
 	public:
 		AZStd::string m_name;
-		AZStd::vector<ModelParameter*>  m_params;
+		AZStd::vector<ModelParameter*> m_params;
 		AZStd::unordered_map<AZStd::string, int> m_idMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
 		ModelParameter* at(unsigned int index) { return m_params.at(index); }
@@ -64,7 +59,7 @@ namespace Cubism3 {
 		void Clear();
 		
 	public:
-		void SyncAnimations() { for (ModelParameter * p : this->m_params) if (p->animDirty) p->SyncAnimation(); }
+		void SyncAnimations() { for (ModelParameter * p : this->m_params) if (p->m_animDirty) p->SyncAnimation(); }
 
 	public:
 		ModelParametersGroup() : m_name("Parameters") {}
@@ -89,19 +84,16 @@ namespace Cubism3 {
 
 	public:
 		virtual ~ModelPart() {}
-		AZStd::string name;
-		int id;
-		float *val;
-		/*float animVal;
-		bool animDirty;
-		CryMutex animMutex;*/
+		AZStd::string m_name;
+		int m_id;
+		float *m_val;
 
 	public:
 		void SyncAnimation();
 
 	public: //editor stuff
 		//AZ::Edit::ElementData ed;
-		ElementInfo ei;
+		ElementInfo m_ei;
 		void InitEdit();
 
 	public: //RTTI stuff
@@ -115,7 +107,7 @@ namespace Cubism3 {
 
 	public:
 		AZStd::string m_name;
-		AZStd::vector<ModelPart*>  m_parts;
+		AZStd::vector<ModelPart*> m_parts;
 		AZStd::unordered_map<AZStd::string, int> m_idMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
 		ModelPart* at(unsigned int index) { return m_parts.at(index); }
@@ -125,7 +117,7 @@ namespace Cubism3 {
 		void Clear();
 
 	public:
-		void SyncAnimations() { for (ModelPart * p : this->m_parts) if (p->animDirty) p->SyncAnimation(); }
+		void SyncAnimations() { for (ModelPart * p : this->m_parts) if (p->m_animDirty) p->SyncAnimation(); }
 
 	public:
 		ModelPartsGroup() : m_name("Parts") {}
@@ -154,35 +146,35 @@ namespace Cubism3 {
 	public:
 		AnimationControl();
 
-	public:
-		AzFramework::SimpleAssetReference<MotionAsset> asset;
-		AZStd::string assetPath;
+	private:
+		AzFramework::SimpleAssetReference<MotionAsset> m_asset;
+		AZStd::string m_assetPath;
 		//AZ::EntityId entId;
 		Cubism3UIComponent * m_component;
 
 	public:
-		void PlayPause();
-		void Stop();
-		void Reset();
-		void LoopCN();
-		void WeightCN();
-		void AssetCN();
-		void BlendingCN();
+		void OnPlayPause();
+		void OnStop();
+		void OnReset();
+		void OnLoopChange();
+		void OnWeightChange();
+		void OnAssetChange();
+		void OnBlendingChange();
 
 	public:
 		//void SetEntityID(AZ::EntityId id) { this->entId = id; }
 		void SetUIComponent(Cubism3UIComponent * component) { this->m_component = component; }
-		bool IsLoaded() { return this->loaded; }
+		bool IsLoaded() { return this->m_loaded; }
 
-	public:
-		bool loop;
-		float weight;
-		int blending;
-		bool pblank;
-		bool sblank;
-		bool rblank;
+	private:
+		bool m_loop;
+		float m_weight;
+		int m_blending;
+		bool m_pblank;
+		bool m_sblank;
+		bool m_rblank;
 
-		bool loaded;
+		bool m_loaded;
 
 	private:
 		enum BlendFunc {

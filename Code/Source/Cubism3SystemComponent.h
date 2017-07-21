@@ -56,7 +56,6 @@ namespace Cubism3
 		// We only store this in order to generate metrics on LyShine specific components
 		static const AZStd::list<AZ::ComponentDescriptor*>* m_componentDescriptors;
 	private:
-		static csmLogFunction logfunc;
 		static void LogMessage(const char * message);
     };
 }

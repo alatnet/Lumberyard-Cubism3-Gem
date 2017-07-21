@@ -10,7 +10,6 @@
 namespace Cubism3
 {
 	const AZStd::list<AZ::ComponentDescriptor*>* Cubism3SystemComponent::m_componentDescriptors = nullptr;
-	csmLogFunction Cubism3SystemComponent::logfunc = nullptr;
 
     void Cubism3SystemComponent::Reflect(AZ::ReflectContext* context)
     {
@@ -62,7 +61,6 @@ namespace Cubism3
     {
 		CryLog("[Cubism3] Cubism3 System Component initializing.");
 		CryLog("[Cubism3] Cubism3 Version: %i", csmGetVersion());
-		Cubism3SystemComponent::logfunc = csmGetLogFunction();
 		csmSetLogFunction(Cubism3SystemComponent::LogMessage);
 		CryLog("[Cubism3] Cubism3 System Component ready.");
     }
@@ -104,6 +102,5 @@ namespace Cubism3
 
 	void Cubism3SystemComponent::LogMessage(const char * message) {
 		CryLog("[Cubism3] %s", message);
-		//if (!Cubism3SystemComponent::logfunc) Cubism3SystemComponent::logfunc(message);
 	}
 }

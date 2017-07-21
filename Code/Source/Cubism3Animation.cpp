@@ -7,6 +7,8 @@
 
 #include "Cubism3EditorData.h"
 
+#include "Cubism3UIComponent.h"
+
 namespace Cubism3 {
 	Cubism3Animation::Cubism3Animation() {
 		this->m_loaded = false;
@@ -17,13 +19,14 @@ namespace Cubism3 {
 		this->m_weight = 1.0f;
 		this->m_playedOnce = false;
 		this->m_playing = false;
+		this->m_drawables = nullptr;
 	}
 
 	Cubism3Animation::~Cubism3Animation() {
 		if (this->m_curves.size() > 0) {
 			for (Curve *c : this->m_curves) { //for each curve.
-				for (int i = 0; i < c->segments.size(); i++) delete c->segments[i].second; //delete the calculation for each segment
-				c->segments.clear(); //clear the segments
+				for (int i = 0; i < c->m_segments.size(); i++) delete c->m_segments[i].second; //delete the calculation for each segment
+				c->m_segments.clear(); //clear the segments
 			}
 			this->m_curves.clear();
 		}
@@ -34,8 +37,8 @@ namespace Cubism3 {
 
 		if (this->m_curves.size() > 0) {
 			for (Curve *c : this->m_curves) { //for each curve.
-				for (int i = 0; i < c->segments.size(); i++) delete c->segments[i].second; //delete the calculation for each segment
-				c->segments.clear(); //clear the segments
+				for (int i = 0; i < c->m_segments.size(); i++) delete c->m_segments[i].second; //delete the calculation for each segment
+				c->m_segments.clear(); //clear the segments
 			}
 			this->m_curves.clear();
 		}
@@ -86,37 +89,37 @@ namespace Cubism3 {
 		//get meta data
 		if (!error) {
 			if (d.HasMember("Meta")) {
-				if (d["Meta"].HasMember("Duration")) this->m_meta.duration = (float)d["Meta"]["Duration"].GetDouble();
+				if (d["Meta"].HasMember("Duration")) this->m_meta.m_duration = (float)d["Meta"]["Duration"].GetDouble();
 				else {
 					CRY_ASSERT_MESSAGE(false, "Animation file does not have Duration in Meta section.");
 					error = true;
 				}
 
-				if (d["Meta"].HasMember("Fps")) this->m_meta.fps = (float)d["Meta"]["Fps"].GetDouble();
+				if (d["Meta"].HasMember("Fps")) this->m_meta.m_fps = (float)d["Meta"]["Fps"].GetDouble();
 				else {
 					CRY_ASSERT_MESSAGE(false, "Animation file does not have Fps in Meta section.");
 					error = true;
 				}
 
-				if (d["Meta"].HasMember("Loop")) this->m_meta.loop = d["Meta"]["Loop"].GetBool();
+				if (d["Meta"].HasMember("Loop")) this->m_meta.m_loop = d["Meta"]["Loop"].GetBool();
 				else {
 					CRY_ASSERT_MESSAGE(false, "Animation file does not have Loop in Meta section.");
 					error = true;
 				}
 
-				if (d["Meta"].HasMember("CurveCount")) this->m_meta.fps = (float)d["Meta"]["CurveCount"].GetInt();
+				if (d["Meta"].HasMember("CurveCount")) this->m_meta.m_curveCount = (float)d["Meta"]["CurveCount"].GetInt();
 				else {
 					CRY_ASSERT_MESSAGE(false, "Animation file does not have CurveCount in Meta section.");
 					error = true;
 				}
 
-				if (d["Meta"].HasMember("TotalSegmentCount")) this->m_meta.fps = (float)d["Meta"]["TotalSegmentCount"].GetInt();
+				if (d["Meta"].HasMember("TotalSegmentCount")) this->m_meta.m_totalSegCount = (float)d["Meta"]["TotalSegmentCount"].GetInt();
 				else {
 					CRY_ASSERT_MESSAGE(false, "Animation file does not have TotalSegmentCount in Meta section.");
 					error = true;
 				}
 
-				if (d["Meta"].HasMember("TotalPointCount")) this->m_meta.fps = (float)d["Meta"]["TotalPointCount"].GetInt();
+				if (d["Meta"].HasMember("TotalPointCount")) this->m_meta.m_totalPointCount = (float)d["Meta"]["TotalPointCount"].GetInt();
 				else {
 					CRY_ASSERT_MESSAGE(false, "Animation file does not have TotalPointCount in Meta section.");
 					error = true;
@@ -133,15 +136,15 @@ namespace Cubism3 {
 				for (unsigned int i = 0; i < d["Curves"].Size(); i++) {
 					CLOG("[Cubism3] Curve: %i", i);
 					Curve * c = new Curve();
-					c->id = -1;
+					c->m_id = -1;
 
 					//get the target
 					if (d["Curves"][i].HasMember("Target")) {
 						AZStd::string targetStr = d["Curves"][i]["Target"].GetString();
 
-						if (targetStr.compare("Model") == 0) c->target = Model;
-						if (targetStr.compare("Parameter") == 0) c->target = Parameter;
-						if (targetStr.compare("Part") == 0) c->target = Part;
+						if (targetStr.compare("Model") == 0) c->m_target = Model;
+						if (targetStr.compare("Parameter") == 0) c->m_target = Parameter;
+						if (targetStr.compare("Part") == 0) c->m_target = Part;
 						CLOG("[Cubism3] - Target: %s", targetStr);
 					} else {
 						CLOG("[Cubism3] - Skipping %i. Target not found.", i);
@@ -151,16 +154,16 @@ namespace Cubism3 {
 
 					//get the id
 					if (d["Curves"][i].HasMember("Id")) {
-						switch (c->target) {
+						switch (c->m_target) {
 						case Model:
-							c->idStr = "Opacity";
+							c->m_idStr = "Opacity";
 							break;
 						case Parameter:
 						case Part:
-							c->idStr = d["Curves"][i]["Id"].GetString();
+							c->m_idStr = d["Curves"][i]["Id"].GetString();
 							break;
 						}
-						CLOG("[Cubism3] - ID: %s", c->idStr.c_str());
+						CLOG("[Cubism3] - ID: %s", c->m_idStr.c_str());
 					} else {
 						CLOG("[Cubism3] - Skipping %i. Id not found.", i);
 						delete c;
@@ -211,60 +214,60 @@ namespace Cubism3 {
 								case LINEAR: //2 data points
 								{
 									Linear * l = new Linear();
-									l->data[0] = segment;
-									l->data[1] = segments.at(si + 1);
+									l->m_data[0] = segment;
+									l->m_data[1] = segments.at(si + 1);
 									calc = l;
 									si += 1;
 
 									CLOG("[Cubism3] -- Linear Type:");
-									CLOG("[Cubism3] --- 0: %f, %f", l->data[0].first, l->data[0].second);
-									CLOG("[Cubism3] --- 1: %f, %f", l->data[1].first, l->data[1].second);
+									CLOG("[Cubism3] --- 0: %f, %f", l->m_data[0].first, l->m_data[0].second);
+									CLOG("[Cubism3] --- 1: %f, %f", l->m_data[1].first, l->m_data[1].second);
 									break;
 								}
 								case BEZIER: //4 data points
 								{
 									Bezier * b = new Bezier();
-									b->data[0] = segment;
-									b->data[1] = segments.at(si + 1);
-									b->data[2] = segments.at(si + 2);
-									b->data[3] = segments.at(si + 3);
+									b->m_data[0] = segment;
+									b->m_data[1] = segments.at(si + 1);
+									b->m_data[2] = segments.at(si + 2);
+									b->m_data[3] = segments.at(si + 3);
 									calc = b;
 									si += 3;
 
 									CLOG("[Cubism3] -- Bezier Type:");
-									CLOG("[Cubism3] --- 0: %f, %f", b->data[0].first, b->data[0].second);
-									CLOG("[Cubism3] --- 1: %f, %f", b->data[1].first, b->data[1].second);
-									CLOG("[Cubism3] --- 2: %f, %f", b->data[2].first, b->data[2].second);
-									CLOG("[Cubism3] --- 3: %f, %f", b->data[3].first, b->data[3].second);
+									CLOG("[Cubism3] --- 0: %f, %f", b->m_data[0].first, b->m_data[0].second);
+									CLOG("[Cubism3] --- 1: %f, %f", b->m_data[1].first, b->m_data[1].second);
+									CLOG("[Cubism3] --- 2: %f, %f", b->m_data[2].first, b->m_data[2].second);
+									CLOG("[Cubism3] --- 3: %f, %f", b->m_data[3].first, b->m_data[3].second);
 									break;
 								}
 								case STEPPED: //1 data point
 								{
 									Stepped * st = new Stepped();
-									st->data = segments.at(si + 1);
-									st->type = STEPPED;
+									st->m_data = segments.at(si + 1);
+									st->m_type = STEPPED;
 									si += 1;
 									calc = st;
 
 									CLOG("[Cubism3] -- Stepped Type:");
-									CLOG("[Cubism3] --- %f, %f", st->data.first, st->data.second);
+									CLOG("[Cubism3] --- %f, %f", st->m_data.first, st->m_data.second);
 									break;
 								}
 								case ISTEPPED: //1 data point
 								{
 									Stepped * ist = new Stepped();
-									ist->data = segment;
-									ist->type = ISTEPPED;
+									ist->m_data = segment;
+									ist->m_type = ISTEPPED;
 									si += 1;
 									calc = ist;
 
 									CLOG("[Cubism3] -- Inverse Stepped Type:");
-									CLOG("[Cubism3] --- %f, %f", ist->data.first, ist->data.second);
+									CLOG("[Cubism3] --- %f, %f", ist->m_data.first, ist->m_data.second);
 									break;
 								}
 								}
 
-								c->segments.push_back({ segment.first, calc });
+								c->m_segments.push_back({ segment.first, calc });
 							}
 						}
 					} else {
@@ -285,8 +288,8 @@ namespace Cubism3 {
 		else {
 			if (this->m_curves.size() > 0) {
 				for (Curve *c : this->m_curves) { //for each curve.
-					for (int i = 0; i < c->segments.size(); i++) delete c->segments[i].second; //delete the calculation for each segment
-					c->segments.clear(); //clear the segments
+					for (int i = 0; i < c->m_segments.size(); i++) delete c->m_segments[i].second; //delete the calculation for each segment
+					c->m_segments.clear(); //clear the segments
 				}
 				this->m_curves.clear();
 			}
@@ -296,11 +299,30 @@ namespace Cubism3 {
 		CLOG("[Cubism3] Animation Loaded.");
 		CLOG("[Cubism3] Number of Curves: %i", this->m_curves.size());
 		for (Curve * c : this->m_curves) {
-			CLOG("[Cubism3] Curve: %s", c->idStr.c_str());
-			CLOG("[Cubism3] - Target: %i", c->target);
-			CLOG("[Cubism3] - Segments: %i", c->segments.size());
+			CLOG("[Cubism3] Curve: %s", c->m_idStr.c_str());
+			CLOG("[Cubism3] - Target: %i", c->m_target);
+			CLOG("[Cubism3] - Segments: %i", c->m_segments.size());
 
-			for (AZStd::pair<float, Calc *> s : c->segments) CLOG("[Cubism3] -- %f -> %i", s.first, s.second->getType());
+			for (AZStd::pair<float, Calc *> s : c->m_segments) {
+				AZStd::string type = "Unknown";
+
+				switch (s.second->getType()) {
+				case LINEAR:
+					type = "Linear";
+					break;
+				case BEZIER:
+					type = "Bezier";
+					break;
+				case STEPPED:
+					type = "Stepped";
+					break;
+				case ISTEPPED:
+					type = "Inverse Stepped";
+					break;
+				}
+
+				CLOG("[Cubism3] -- %f -> %s", s.first, type.c_str());
+			}
 		}
 		#endif
 
@@ -313,22 +335,22 @@ namespace Cubism3 {
 			this->m_partsGroup = nullptr;
 
 			//remove id association.
-			for (Curve *c : this->m_curves) c->id = -1;
+			for (Curve *c : this->m_curves) c->m_id = -1;
 		} else {
 			this->m_paramGroup = paramGroup;
 			this->m_partsGroup = partsGroup;
 
 			//create id associaton.
 			for (Curve *c : this->m_curves) {
-				switch (c->target) {
+				switch (c->m_target) {
 				case Model:
 					//ignore
 					break;
 				case Parameter:
-					c->id = this->m_paramGroup->find(c->idStr);
+					c->m_id = this->m_paramGroup->find(c->m_idStr);
 					break;
 				case Part:
-					c->id = this->m_partsGroup->find(c->idStr);
+					c->m_id = this->m_partsGroup->find(c->m_idStr);
 					break;
 				}
 			}
@@ -339,7 +361,7 @@ namespace Cubism3 {
 	}
 
 	void Cubism3Animation::SetLooping(bool looping) {
-		this->m_meta.loop = looping;
+		this->m_meta.m_loop = looping;
 		this->m_playedOnce = false;
 	}
 
@@ -348,11 +370,11 @@ namespace Cubism3 {
 	}
 
 	bool Cubism3Animation::IsStopped() {
-		return this->m_playing && (this->m_time == 0.0f || this->m_time == this->m_meta.duration);
+		return this->m_playing && (this->m_time == 0.0f || this->m_time == this->m_meta.m_duration);
 	}
 
 	bool Cubism3Animation::IsPaused() {
-		return this->m_playing && (this->m_time != 0.0f || this->m_time != this->m_meta.duration);
+		return this->m_playing && (this->m_time != 0.0f || this->m_time != this->m_meta.m_duration);
 	}
 
 	void Cubism3Animation::Play() {
@@ -377,12 +399,12 @@ namespace Cubism3 {
 		if (!this->m_playedOnce && this->m_playing) { //if we havent played once and we are playing
 			this->m_time += delta;
 
-			if (this->m_time > this->m_meta.duration) { //if we have exceded the animation time
-				if (!this->m_meta.loop) { //if we are not looping
+			if (this->m_time > this->m_meta.m_duration) { //if we have exceded the animation time
+				if (!this->m_meta.m_loop) { //if we are not looping
 					this->m_playedOnce = true; //make sure that we dont loop
 					this->m_playing = false; //make sure we are stopped
-					this->m_time = this->m_meta.duration; //stop at the end of the animation
-				} else while (this->m_time > this->m_meta.duration) { this->m_time -= this->m_meta.duration; } //trim the time
+					this->m_time = this->m_meta.m_duration; //stop at the end of the animation
+				} else while (this->m_time > this->m_meta.m_duration) { this->m_time -= this->m_meta.m_duration; } //trim the time
 			}
 
 			this->UpdateCurves();
@@ -398,40 +420,41 @@ namespace Cubism3 {
 	void Cubism3Animation::UpdateCurves() {
 		for (Curve * c : this->m_curves) { //for each curve
 			float val = 0.0f;
-			for (int i = c->segments.size() - 1; i >= 0; i--) { //for each segment
-				if (this->m_time > c->segments[i].first) { //find the keyframe that we are in
-					val = c->segments[i].second->calculate(this->m_time); //calculate the animation value
+			for (int i = c->m_segments.size() - 1; i >= 0; i--) { //for each segment
+				if (this->m_time >= c->m_segments[i].first) { //find the keyframe that we are in
+					val = c->m_segments[i].second->calculate(this->m_time); //calculate the animation value
 					break;
 				}
 			}
 
-			if (c->id != -1) {
+			if (c->m_id != -1) {
 				ModelAnimation * target = nullptr;
-				switch (c->target) {
-				case Model:
-					//outside function?
-					break;
+				switch (c->m_target) {
 				case Parameter:
-					target = this->m_paramGroup->at(c->id);
+					target = this->m_paramGroup->at(c->m_id);
 					break;
 				case Part:
-					target = this->m_partsGroup->at(c->id);
+					target = this->m_partsGroup->at(c->m_id);
 					break;
 				}
 
 				if (target != nullptr) {
-					target->animMutex.Lock();
-					target->animVal = this->m_floatBlendFunc(target->animVal, val, this->m_weight); //blend the animation
-					target->animDirty = true;
-					target->animMutex.Unlock();
+					target->m_animMutex.Lock();
+					target->m_animVal = this->m_floatBlendFunc(target->m_animVal, val, this->m_weight); //blend the animation
+					target->m_animDirty = true;
+					target->m_animMutex.Unlock();
 				}
+			} else if (c->m_target == Model) {
+				if (this->m_drawables)
+					for (Cubism3Drawable* d : *this->m_drawables)
+						d->m_animOpacity = this->m_floatBlendFunc(d->m_animOpacity, val/100.0f, this->m_weight);
 			}
 		}
 	}
 
 	float Cubism3Animation::Linear::calculate(float time) {
-		float t = (time - this->data[0].first) / (this->data[1].first - this->data[0].first);
-		return this->data[0].second + ((this->data[1].second - this->data[0].second) * t);
+		float t = (time - this->m_data[0].first) / (this->m_data[1].first - this->m_data[0].first);
+		return this->m_data[0].second + ((this->m_data[1].second - this->m_data[0].second) * t);
 	}
 
 	static inline AZStd::pair<float, float> Lerp(AZStd::pair<float, float> a, AZStd::pair<float, float> b, const float t) {
@@ -442,13 +465,13 @@ namespace Cubism3 {
 	}
 
 	float Cubism3Animation::Bezier::calculate(float time) {
-		float t = (time - this->data[0].first) / (this->data[3].first - this->data[0].first);
+		float t = (time - this->m_data[0].first) / (this->m_data[3].first - this->m_data[0].first);
 
 		AZStd::pair<float, float> p01, p12, p23, p012, p123;
 
-		p01 = Lerp(this->data[0], this->data[1], t);
-		p12 = Lerp(this->data[1], this->data[2], t);
-		p23 = Lerp(this->data[2], this->data[3], t);
+		p01 = Lerp(this->m_data[0], this->m_data[1], t);
+		p12 = Lerp(this->m_data[1], this->m_data[2], t);
+		p23 = Lerp(this->m_data[2], this->m_data[3], t);
 
 		p012 = Lerp(p01, p12, t);
 		p123 = Lerp(p12, p23, t);

@@ -4,6 +4,7 @@
 #include "Cubism3Assets.h"
 //#include "Cubism3EditorData.h"
 #include "Include\Cubism3\Cubism3UIBus.h"
+#include "Cubism3Drawable.h"
 
 namespace Cubism3 {
 	class ModelParametersGroup;
@@ -30,6 +31,7 @@ namespace Cubism3 {
 
 	public:
 		void SetParametersAndParts(ModelParametersGroup * paramGroup, ModelPartsGroup * partsGroup);
+		void SetDrawables(AZStd::vector<Cubism3Drawable*> *drawables) { this->m_drawables = drawables; }
 
 	public:
 		void SetFloatBlend(Cubism3AnimationFloatBlend floatBlendFunc) { this->m_floatBlendFunc = floatBlendFunc; }
@@ -40,7 +42,7 @@ namespace Cubism3 {
 		bool IsPlaying();
 		bool IsStopped();
 		bool IsPaused();
-		bool IsLooping() { return this->m_meta.loop; }
+		bool IsLooping() { return this->m_meta.m_loop; }
 
 	public:
 		void Play();
@@ -59,6 +61,7 @@ namespace Cubism3 {
 		bool m_loaded;
 		ModelParametersGroup * m_paramGroup;
 		ModelPartsGroup * m_partsGroup;
+		AZStd::vector<Cubism3Drawable*> *m_drawables;
 
 		Cubism3AnimationFloatBlend m_floatBlendFunc;
 
@@ -70,12 +73,12 @@ namespace Cubism3 {
 
 	private: //meta data
 		struct Meta {
-			float duration; //end time
-			float fps;
-			bool loop;
-			unsigned int curveCount;
-			unsigned int totalSegCount;
-			unsigned int totalPointCount;
+			float m_duration; //end time
+			float m_fps;
+			bool m_loop;
+			unsigned int m_curveCount;
+			unsigned int m_totalSegCount;
+			unsigned int m_totalPointCount;
 		};
 
 		Meta m_meta;
@@ -96,24 +99,24 @@ namespace Cubism3 {
 
 		class Linear : public Calc {
 		public:
-			AZStd::pair<float, float> data[2];
+			AZStd::pair<float, float> m_data[2];
 			float calculate(float time);
 			SegmentType getType() { return LINEAR; }
 		};
 
 		class Bezier : public Calc {
 		public:
-			AZStd::pair<float, float> data[4];
+			AZStd::pair<float, float> m_data[4];
 			float calculate(float time);
 			SegmentType getType() { return BEZIER; }
 		};
 
 		class Stepped : public Calc {
 		public:
-			SegmentType type;
-			AZStd::pair<float, float> data;
-			float calculate(float time) { return this->data.second; }
-			SegmentType getType() { return type; }
+			SegmentType m_type;
+			AZStd::pair<float, float> m_data;
+			float calculate(float time) { return this->m_data.second; }
+			SegmentType getType() { return m_type; }
 		};
 
 		enum CurveTarget {
@@ -123,10 +126,10 @@ namespace Cubism3 {
 		};
 
 		struct Curve {
-			CurveTarget target;
-			int id; //id from m_group - -1 for model opacity
-			AZStd::string idStr;
-			AZStd::vector<AZStd::pair<float, Calc *>> segments; //keyframe -> calc //reverse lookup, if time > keyframe then calc(time)
+			CurveTarget m_target;
+			int m_id; //id from m_group - -1 for model opacity
+			AZStd::string m_idStr;
+			AZStd::vector<AZStd::pair<float, Calc *>> m_segments; //keyframe -> calc //reverse lookup, if time > keyframe then calc(time)
 		};
 
 		AZStd::vector<Curve *> m_curves;

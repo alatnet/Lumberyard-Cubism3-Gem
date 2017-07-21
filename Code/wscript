@@ -7,7 +7,6 @@ def build(bld):
 		
         file_list   = [
 			'cubism3.waf_files',
-			'cubism3.animation.waf_files',
 			# uncomment this and set CUBISM3_ANIMATION_FRAMEWORK to 1 in defines to use the Cubism3 Framework
 			#'cubism3.animation.framework.waf_files',
 		],

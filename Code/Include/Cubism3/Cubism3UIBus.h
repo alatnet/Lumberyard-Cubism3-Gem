@@ -59,6 +59,10 @@ namespace Cubism3 {
 		virtual float GetPartOpacityS(AZStd::string name) = 0;
 		virtual void SetPartOpacityS(AZStd::string name, float value) = 0;
 
+	public: //opacity
+		virtual float GetOpacity() = 0;
+		virtual void SetOpacity(float opacity) = 0;
+
 	public: //threading
 		enum Threading {
 			NONE,

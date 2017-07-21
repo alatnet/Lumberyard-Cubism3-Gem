@@ -25,6 +25,14 @@
     "Source/Editor": [
       "Source/Cubism3EditorData.cpp",
       "Source/Cubism3EditorData.h"
+    ],
+    "Source/Animation": [
+      "Source/Cubism3Animation.cpp",
+      "Source/Cubism3Animation.h"
+    ],
+    "Source/Drawable": [
+      "Source/Cubism3Drawable.cpp",
+      "Source/Cubism3Drawable.h"
     ]
   }
 }  

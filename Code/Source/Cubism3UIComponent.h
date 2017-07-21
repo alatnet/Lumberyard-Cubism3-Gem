@@ -1,9 +1,7 @@
 #pragma once
 
 #include <IRenderer.h>
-#include <Cry_Color.h>
 #include <ITexture.h>
-#include <VertexFormats.h>
 #include <CryThread.h>
 
 #include <LyShine/Bus/UiRenderBus.h>
@@ -21,6 +19,7 @@
 #include "Cubism3EditorData.h"
 #include "Cubism3Debug.h"
 #include "Cubism3Animation.h"
+#include "Cubism3Drawable.h"
 #include "Cubism3Bus.h"
 #include <Cubism3/Cubism3UIBus.h>
 
@@ -83,7 +82,7 @@ namespace Cubism3 {
 		// Cubism3UIBus
 		//load type
 		void SetLoadType(LoadType lt);
-		LoadType GetLoadType() { return this->lType; }
+		LoadType GetLoadType() { return this->m_lType; }
 
 		//pathnames
 		void SetMocPathname(AZStd::string path);
@@ -125,11 +124,15 @@ namespace Cubism3 {
 		float GetPartOpacityS(AZStd::string name);
 		void SetPartOpacityS(AZStd::string name, float value);
 
+	public: //opacity
+		virtual float GetOpacity() { return this->m_opacity; }
+		virtual void SetOpacity(float opacity);
+
 		//threading
 		void SetThreading(Cubism3UIInterface::Threading t);
 		Cubism3UIInterface::Threading GetThreading();
 		void SetMultiThreadLimiter(unsigned int limiter);
-		unsigned int GetMultiThreadLimiter() { return this->threadLimiter; }
+		unsigned int GetMultiThreadLimiter() { return this->m_threadLimiter; }
 		// ~Cubism3UIBus
 
 	public:
@@ -172,6 +175,7 @@ namespace Cubism3 {
 		void OnThreadingChange();
 		void OnFillChange();
 		void OnLoadTypeChange();
+		void OnAnimControlsChange();
 
 	private: //rendering updating
 		void PreRender();
@@ -180,26 +184,28 @@ namespace Cubism3 {
 		void DisableMasking();
 
 	private: //misc funcs
-		bool IsLoadTypeSingle() { return this->lType == Single; }
-		bool IsLoadTypeJSON() { return this->lType == JSON; }
+		bool IsLoadTypeSingle() { return this->m_lType == Single; }
+		bool IsLoadTypeJSON() { return this->m_lType == JSON; }
 
 	private:
-		csmMoc * moc;
-		csmModel * model;
-		ITexture * texture; //used by single
-		AZStd::vector<ITexture*> textures; //used by json
+		csmMoc * m_moc;
+		csmModel * m_model;
+		ITexture * m_texture; //used by single
+		AZStd::vector<ITexture*> m_textures; //used by json
 
-		AZ::Vector2 modelCanvasSize;
-		AZ::Vector2 modelOrigin;
-		float modelAspect;
-		unsigned int numTextures;
+		AZ::Vector2 m_modelCanvasSize;
+		AZ::Vector2 m_modelOrigin;
+		float m_modelAspect;
+		unsigned int m_numTextures;
 
-		AZ::Vector2 modelSize;
-		bool fill;
+		AZ::Vector2 m_modelSize;
+		bool m_fill;
 
-		bool modelLoaded;
+		bool m_modelLoaded;
 
-		LoadType lType;
+		LoadType m_lType;
+
+		float m_opacity, m_prevOpacity;
 
 	private: //asset stuff
 		MocAssetRef m_mocPathname;
@@ -209,59 +215,29 @@ namespace Cubism3 {
 		AZStd::vector<AzFramework::SimpleAssetReference<LmbrCentral::TextureAsset>> m_imagesPathname;
 
 	private: //animations stuff
-		AZStd::unordered_map<AZStd::string, Cubism3Animation*> animations;
-		AZStd::vector<AnimationControl> animControls;
-		void animControlsChangeNotify();
+		AZStd::unordered_map<AZStd::string, Cubism3Animation*> m_animations;
+		AZStd::vector<AnimationControl> m_animControls;
 
 	private: //parameter stuff
-		ModelParametersGroup params;
+		ModelParametersGroup m_params;
 
 	private: //part stuff
-		ModelPartsGroup parts;
+		ModelPartsGroup m_parts;
 
 	private: //drawable stuff
-		AZ::Matrix4x4 transform, uvTransform, prevViewport;
-		bool transformUpdated;
+		AZ::Matrix4x4 m_transform, m_uvTransform, m_prevViewport;
+		bool m_transformUpdated;
 
-		UiTransform2dInterface::Anchors prevAnchors;
-		UiTransform2dInterface::Offsets prevOffsets;
+		UiTransform2dInterface::Anchors m_prevAnchors;
+		UiTransform2dInterface::Offsets m_prevOffsets;
 
-		typedef struct Drawable {
-			AZStd::string name; //csmGetDrawableIds
-			int id;
-			csmFlags constFlags; //csmGetDrawableConstantFlags
-			csmFlags dynFlags; //csmGetDrawableDynamicFlags //constant update?
-			int texId; //csmGetDrawableTextureIndices //used when using model3.json
-			int drawOrder; //csmGetDrawableDrawOrders
-			int renderOrder; //csmGetDrawableRenderOrders
-			float opacity; //csmGetDrawableOpacities //color (alpha) //update as needed?
-			uint32 packedOpacity;
+	private:
+		AZStd::vector<Cubism3Drawable*> m_drawables;
 
-			int maskCount; //csmGetDrawableMaskCounts
-			uint16 * maskIndices; //csmGetDrawableMasks
-
-			AZ::Matrix4x4 *transform, *uvTransform;
-
-			int vertCount;
-			SVF_P3F_C4B_T2F * verts; //csmGetDrawableVertexPositions, csmGetDrawableVertexUvs //update only when needed to?
-
-			const csmVector2* rawVerts;
-			const csmVector2* rawUVs;
-
-			int indicesCount; //csmGetDrawableIndexCounts
-			uint16 * indices; //csmGetDrawableIndices
-
-			bool visible;
-
-			void update(csmModel* model, bool transformUpdate, bool &renderOrderChanged);
-		} Drawable;
-
-		AZStd::vector<Drawable*> drawables;
-
-		bool renderOrderChanged;
+		bool m_renderOrderChanged;
 
 		#ifdef ENABLE_CUBISM3_DEBUG
-		bool wireframe;
+		bool m_wireframe;
 		#endif
 
 	private: //threading stuff
@@ -270,8 +246,8 @@ namespace Cubism3 {
 
 		class DrawableThreadBase : public CryThread<CryRunnable> {
 		public:
-			DrawableThreadBase(AZStd::vector<Drawable*> *drawables);
-			virtual ~DrawableThreadBase() {}
+			DrawableThreadBase(AZStd::vector<Cubism3Drawable*> *drawables);
+			virtual ~DrawableThreadBase() { this->Cancel(); }
 		public:
 			void SetModel(csmModel * model) { this->m_model = model; }
 			csmModel * GetModel() { return this->m_model; }
@@ -284,6 +260,8 @@ namespace Cubism3 {
 			void SetParams(ModelParametersGroup * params) { this->m_params = params; }
 			void SetParts(ModelPartsGroup * parts) { this->m_parts = parts; }
 		public:
+			void SetOpacity(float opacity) { this->m_opacity = opacity; }
+		public:
 			virtual bool RenderOrderChanged() { return this->m_renderOrderChanged; }
 			virtual void SetRenderOrderChanged(bool changed) { this->m_renderOrderChanged = changed; }
 		public:
@@ -293,7 +271,7 @@ namespace Cubism3 {
 		protected:
 			bool m_renderOrderChanged;
 		protected:
-			AZStd::vector<Drawable*> *m_drawables;
+			AZStd::vector<Cubism3Drawable*> *m_drawables;
 			csmModel * m_model;
 			bool m_transformUpdate;
 		protected: //animations stuff
@@ -301,6 +279,7 @@ namespace Cubism3 {
 			AZStd::unordered_map<AZStd::string, Cubism3Animation*> *m_animations;
 			ModelParametersGroup * m_params;
 			ModelPartsGroup * m_parts;
+			float m_opacity, m_prevOpacity;
 		protected:
 			bool m_canceled;
 		};
@@ -308,7 +287,7 @@ namespace Cubism3 {
 		//one thread to rule them all.
 		class DrawableSingleThread : public DrawableThreadBase {
 		public:
-			DrawableSingleThread(AZStd::vector<Drawable*> *drawables) : DrawableThreadBase(drawables) {}
+			DrawableSingleThread(AZStd::vector<Cubism3Drawable*> *drawables) : DrawableThreadBase(drawables) {}
 		public:
 			void Run();
 		};
@@ -348,14 +327,16 @@ namespace Cubism3 {
 		//limited number of threads, each thread updates a drawable.
 		class DrawableMultiThread : public DrawableThreadBase {
 		public:
-			DrawableMultiThread(AZStd::vector<Drawable*> *drawables, unsigned int limiter);
+			DrawableMultiThread(AZStd::vector<Cubism3Drawable*> *drawables, unsigned int limiter);
 			~DrawableMultiThread();
 		public:
 			void Run();
 		public:
 			bool RenderOrderChanged();
 		protected:
-			Drawable * GetNextDrawable();
+			Cubism3Drawable * GetNextDrawable();
+			float GetOpacity() { return this->m_opacity; }
+			bool GetOpacityChanged() { return this->m_opacity != this->m_prevOpacity; }
 		private:
 			class SubThread : public CryThread<CryRunnable> {
 			public:
@@ -370,25 +351,49 @@ namespace Cubism3 {
 				bool m_canceled;
 			};
 		protected:
-			bool animations;
+			//bool animations;
 		private:
 			SubThread ** m_threads;
-			unsigned int numThreads;
-			CryRWLock rwmutex;
-			CryMutex dMutex;
-			unsigned int nextDrawable;
+			unsigned int m_numThreads;
+			CryRWLock m_rwmutex;
+			CryMutex m_dMutex;
+			unsigned int m_nextDrawable;
 		};
 
-		DrawableThreadBase *tJob;
-		unsigned int threadLimiter;
-		CryMutex threadMutex; //used to block when creating or destroying the update thread.
+		DrawableThreadBase *m_thread;
+		unsigned int m_threadLimiter;
+		CryMutex m_threadMutex; //used to block when creating or destroying the update thread.
 
 	private: //masking stuff
-		bool enableMasking;
-		bool useAlphaTest;
-		int priorBaseState;
+		int m_priorBaseState;
 
 	#ifdef ENABLE_CUBISM3_DEBUG
+	private: //masking stuff
+		bool m_enableMasking;
+
+		enum AlphaTest {
+			ATDISABLE = -1,
+			Greater = GS_ALPHATEST_GREATER,
+			Less = GS_ALPHATEST_LESS,
+			GEqual = GS_ALPHATEST_GEQUAL,
+			LEqual = GS_ALPHATEST_LEQUAL
+		};
+
+		AlphaTest m_useAlphaTest;
+
+		enum ColorMask {
+			CMDISABLE = -1,
+			NoR = GS_NOCOLMASK_R,
+			NoG = GS_NOCOLMASK_G,
+			NoB = GS_NOCOLMASK_B,
+			NoA = GS_NOCOLMASK_A,
+			RGB = GS_COLMASK_RGB,
+			A = GS_COLMASK_A,
+			None = GS_COLMASK_NONE
+		};
+
+		ColorMask m_useColorMask;
+
 	private: //stencil stuff
 		enum SFunc {
 			FDISABLE = -1,
@@ -402,8 +407,8 @@ namespace Cubism3 {
 			NOTEQUAL = FSS_STENCFUNC_NOTEQUAL,
 			MASK = FSS_STENCFUNC_MASK
 		};
-		SFunc stencilFunc, stencilCCWFunc;
-		bool sTwoSided;
+		SFunc m_stencilFunc, m_stencilCCWFunc;
+		bool m_sTwoSided;
 
 		enum SOp {
 			ODISABLE = -1,
@@ -417,8 +422,8 @@ namespace Cubism3 {
 			INVERT = FSS_STENCOP_INVERT
 		};
 
-		SOp opFail, opZFail, opPass;
-		SOp opCCWFail, opCCWZFail, opCCWPass;
+		SOp m_opFail, m_opZFail, m_opPass;
+		SOp m_opCCWFail, m_opCCWZFail, m_opCCWPass;
 	#endif
 	};
 }
