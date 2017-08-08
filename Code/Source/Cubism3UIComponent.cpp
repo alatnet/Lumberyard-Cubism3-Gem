@@ -339,7 +339,7 @@ namespace Cubism3 {
 
 		AZ::BehaviorContext* behaviorContext = azrtti_cast<AZ::BehaviorContext*>(context);
 		if (behaviorContext) {
-			behaviorContext->Class<Cubism3UIComponent>("Cubisim3UI")
+			behaviorContext->Class<Cubism3UIComponent>("Cubism3UI")
 				->Enum<Cubism3UIInterface::LoadType::Single>("ltSingle")
 				->Enum<Cubism3UIInterface::LoadType::JSON>("ltJSON")
 				->Enum<Cubism3UIInterface::Threading::NONE>("tNone")

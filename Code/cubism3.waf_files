@@ -7,8 +7,8 @@
   },
   "auto": {
     "Include": [
-      "Source/Live2DCubismCore.h",
-      "Include/Cubism3/Cubism3UIBus.h"
+      "Include/Cubism3/Cubism3UIBus.h",
+      "Source/Live2DCubismCore.h"
     ],
     "Source": [
       "Source/Cubism3Module.cpp",
