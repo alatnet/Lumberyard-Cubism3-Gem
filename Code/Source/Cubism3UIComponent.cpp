@@ -813,7 +813,8 @@ namespace Cubism3 {
 		gEnv->pFileIO->Size(fileHandler, mocSize);
 
 		if (fileHandler != AZ::IO::InvalidHandle && mocSize > 0) {
-			void *mocBuf = CryModuleMemalign(mocSize, csmAlignofMoc); //CryModuleMemalignFree
+			//void *mocBuf = CryModuleMemalign(mocSize, csmAlignofMoc); //CryModuleMemalignFree
+			void *mocBuf = azmalloc(mocSize, csmAlignofMoc);
 			gEnv->pFileIO->Read(fileHandler, mocBuf, mocSize);
 
 			gEnv->pFileIO->Close(fileHandler);
@@ -823,7 +824,8 @@ namespace Cubism3 {
 			if (this->m_moc) {
 				//load model
 				unsigned int modelSize = csmGetSizeofModel(this->m_moc);
-				void * modelBuf = CryModuleMemalign(modelSize, csmAlignofModel); //CryModuleMemalignFree
+				//void * modelBuf = CryModuleMemalign(modelSize, csmAlignofModel); //CryModuleMemalignFree
+				void * modelBuf = azmalloc(modelSize, csmAlignofModel);
 
 				this->m_model = csmInitializeModelInPlace(this->m_moc, modelBuf, modelSize);
 
@@ -1065,8 +1067,11 @@ namespace Cubism3 {
 		this->m_parts.Clear();
 		this->m_dataElements.clear(); //clear all editor data
 
-		if (this->m_model) CryModuleMemalignFree(this->m_model); //free the model
-		if (this->m_moc) CryModuleMemalignFree(this->m_moc); //free the moc
+		//if (this->m_model) CryModuleMemalignFree(this->m_model); //free the model
+		//if (this->m_moc) CryModuleMemalignFree(this->m_moc); //free the moc
+
+		if (this->m_model) azfree(this->m_model); //free the model
+		if (this->m_moc) azfree(this->m_moc); //free the moc
 
 		this->m_model = nullptr;
 		this->m_moc = nullptr;
@@ -1139,7 +1144,7 @@ namespace Cubism3 {
 		AZ::u64 size;
 		gEnv->pFileIO->Size(fileHandler, size);
 
-		char *jsonBuff = (char *)malloc(size+1);
+		char *jsonBuff = (char *)azmalloc(size+1);
 		gEnv->pFileIO->Read(fileHandler, jsonBuff, size);
 
 		gEnv->pFileIO->Close(fileHandler);
@@ -1149,7 +1154,7 @@ namespace Cubism3 {
 		//parse the json file
 		rapidjson::Document d;
 		d.Parse(jsonBuff);
-		free(jsonBuff);
+		azfree(jsonBuff);
 
 		//make sure the json file is valid
 		if (!d.IsObject()) {
