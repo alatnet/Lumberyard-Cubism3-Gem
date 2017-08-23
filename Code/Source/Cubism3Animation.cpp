@@ -55,7 +55,7 @@ namespace Cubism3 {
 		AZ::u64 size;
 		gEnv->pFileIO->Size(fileHandler, size);
 
-		char *jsonBuff = (char *)malloc(size + 1);
+		char *jsonBuff = (char *)azmalloc(size + 1);
 		gEnv->pFileIO->Read(fileHandler, jsonBuff, size);
 
 		gEnv->pFileIO->Close(fileHandler);
@@ -65,7 +65,7 @@ namespace Cubism3 {
 		//parse the json file
 		rapidjson::Document d;
 		d.Parse(jsonBuff);
-		free(jsonBuff);
+		azfree(jsonBuff);
 
 		//parse check
 		if (!d.IsObject()) {

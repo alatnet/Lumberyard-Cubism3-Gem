@@ -1015,15 +1015,15 @@ namespace Cubism3 {
 
 					this->m_modelLoaded = true;
 				} else {
-					CryModuleMemalignFree(this->m_model);
-					CryModuleMemalignFree(this->m_moc);
+					azfree(this->m_model);
+					azfree(this->m_moc);
 					this->m_model = nullptr;
 					this->m_moc = nullptr;
 					this->m_modelLoaded = false;
 					CRY_ASSERT_MESSAGE(false, "Could not initialize model data.");
 				}
 			} else {
-				CryModuleMemalignFree(this->m_moc);
+				azfree(this->m_moc);
 				this->m_moc = nullptr;
 				this->m_modelLoaded = false;
 				CRY_ASSERT_MESSAGE(false, "Could not initialize moc data.");
