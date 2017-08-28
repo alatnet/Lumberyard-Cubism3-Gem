@@ -28,7 +28,7 @@ namespace Cubism3
                 ec->Class<Cubism3SystemComponent>("Cubism3", "Provides Cubism3 support to LyShine.")
                     ->ClassElement(AZ::Edit::ClassElements::EditorData, "")
                         ->Attribute(AZ::Edit::Attributes::Category, "UI")
-                        ->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC("System"))
+                        ->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC("System", 0xc94d118b))
                         ->Attribute(AZ::Edit::Attributes::AutoExpand, true)
                     ;
             }
@@ -37,12 +37,12 @@ namespace Cubism3
 
     void Cubism3SystemComponent::GetProvidedServices(AZ::ComponentDescriptor::DependencyArrayType& provided)
     {
-        provided.push_back(AZ_CRC("Cubism3Service"));
+        provided.push_back(AZ_CRC("Cubism3Service", 0xaecd0fd2));
     }
 
     void Cubism3SystemComponent::GetIncompatibleServices(AZ::ComponentDescriptor::DependencyArrayType& incompatible)
     {
-        incompatible.push_back(AZ_CRC("Cubism3Service"));
+        incompatible.push_back(AZ_CRC("Cubism3Service", 0xaecd0fd2));
     }
 
     void Cubism3SystemComponent::GetRequiredServices(AZ::ComponentDescriptor::DependencyArrayType& required)

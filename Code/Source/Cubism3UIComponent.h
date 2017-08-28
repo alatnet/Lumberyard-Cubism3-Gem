@@ -55,10 +55,10 @@ namespace Cubism3 {
 
 	public:  // static member functions
 		static void GetProvidedServices(AZ::ComponentDescriptor::DependencyArrayType& provided) {
-			provided.push_back(AZ_CRC("UiCubism3Service"));
+			provided.push_back(AZ_CRC("UiCubism3Service", 0x02be01c3));
 		}
 		static void GetIncompatibleServices(AZ::ComponentDescriptor::DependencyArrayType& incompatible) {
-			incompatible.push_back(AZ_CRC("UiCubism3Service"));
+			incompatible.push_back(AZ_CRC("UiCubism3Service", 0x02be01c3));
 			incompatible.push_back(AZ_CRC("UiVisualService", 0xa864fdf8));
 		}
 		static void GetRequiredServices(AZ::ComponentDescriptor::DependencyArrayType& required) {
