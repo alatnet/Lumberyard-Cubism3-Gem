@@ -77,8 +77,8 @@ namespace Cubism3 {
 		this->m_ei.m_editData.m_elementId = AZ::Edit::UIHandlers::Slider;
 		this->m_ei.m_editData.m_name = this->m_name.c_str();
 		this->m_ei.m_editData.m_description = this->m_name.c_str();
-		this->m_ei.m_editData.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Max, aznew AZ::Edit::AttributeData<float>(1.0f))); //opacity min
-		this->m_ei.m_editData.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Min, aznew AZ::Edit::AttributeData<float>(0.0f))); //opacity max
+		this->m_ei.m_editData.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Max, aznew AZ::Edit::AttributeData<float>(1.0f))); //opacity max
+		this->m_ei.m_editData.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Min, aznew AZ::Edit::AttributeData<float>(0.0f))); //opacity min
 	}
 
 	void ModelPart::Reflect(AZ::SerializeContext* serializeContext) {

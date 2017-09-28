@@ -1,15 +1,16 @@
-
-
 def build(bld):
     bld.DefineGem(
         #includes
-        includes = [ bld.Path('Code/CryEngine/CryAction') ],
+        includes = [
+            bld.Path('Code/CryEngine/CryAction'),
+            bld.path.abspath() + '/../3rdParty/include'
+        ],
 		
-        file_list   = [
-			'cubism3.waf_files',
-			# uncomment this and set CUBISM3_ANIMATION_FRAMEWORK to 1 in defines to use the Cubism3 Framework
-			#'cubism3.animation.framework.waf_files',
-		],
+  #      file_list   = [
+		#	'cubism3.waf_files',
+		#	# uncomment this and set CUBISM3_ANIMATION_FRAMEWORK to 1 in defines to use the Cubism3 Framework
+		#	#'cubism3.animation.framework.waf_files',
+		#],
 
         debug_win_linkflags = [ '/VERBOSE' ],
 
@@ -37,35 +38,35 @@ def build(bld):
 
         #library
         lib = [ 'Live2DCubismCore' ],
-        
+
         #library paths
         #windows
-        win_debug_libpath = [ bld.Path('Gems/Cubism3/3rdParty/develop/windows/x86_64') ],
-        win_release_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/windows/x86_64') ],
-        win_performance_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/windows/x86_64') ],
-        win_profile_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/windows/x86_64') ],
+        win_debug_libpath = [ bld.path.abspath() + '/../3rdParty/develop/windows/x86_64' ],
+        win_release_libpath = [ bld.path.abspath() + '/../3rdParty/release/windows/x86_64' ],
+        win_performance_libpath = [ bld.path.abspath() + '/../3rdParty/release/windows/x86_64' ],
+        win_profile_libpath = [ bld.path.abspath() + '/../3rdParty/release/windows/x86_64' ],
 
         #linux
-        linux_debug_libpath = [ bld.Path('Gems/Cubism3/3rdParty/develop/linux/x86_64') ],
-        linux_release_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/linux/x86_64') ],
-        linux_performance_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/linux/x86_64') ],
-        linux_profile_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/linux/x86_64') ],
+        linux_debug_libpath = [ bld.path.abspath() + '/../3rdParty/develop/linux/x86_64' ],
+        linux_release_libpath = [ bld.path.abspath() + '/../3rdParty/release/linux/x86_64' ],
+        linux_performance_libpath = [ bld.path.abspath() + '/../3rdParty/release/linux/x86_64' ],
+        linux_profile_libpath = [ bld.path.abspath() + '/../3rdParty/release/linux/x86_64' ],
         
         #darwin (macosx)
-        darwin_debug_libpath = [ bld.Path('Gems/Cubism3/3rdParty/develop/macos') ],
-        darwin_release_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/macos') ],
-        darwin_performance_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/macos') ],
-        darwin_profile_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/macos') ],
+        darwin_debug_libpath = [ bld.path.abspath() + '/../3rdParty/develop/macos' ],
+        darwin_release_libpath = [ bld.path.abspath() + '/../3rdParty/release/macos' ],
+        darwin_performance_libpath = [ bld.path.abspath() + '/../3rdParty/release/macos' ],
+        darwin_profile_libpath = [ bld.path.abspath() + '/../3rdParty/release/macos' ],
         
         #android
-        android_debug_libpath = [ bld.Path('Gems/Cubism3/3rdParty/develop/android/armeabi-v7a') ],
-        android_release_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/android/armeabi-v7a') ],
-        android_performance_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/android/armeabi-v7a') ],
-        android_profile_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/android/armeabi-v7a') ],
+        android_debug_libpath = [ bld.path.abspath() + '/../3rdParty/develop/android/armeabi-v7a' ],
+        android_release_libpath = [ bld.path.abspath() + '/../3rdParty/release/android/armeabi-v7a' ],
+        android_performance_libpath = [ bld.path.abspath() + '/../3rdParty/release/android/armeabi-v7a' ],
+        android_profile_libpath = [ bld.path.abspath() + '/../3rdParty/release/android/armeabi-v7a' ],
 
         #ios
-        ios_debug_libpath = [ bld.Path('Gems/Cubism3/3rdParty/develop/ios') ],
-        ios_release_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/ios') ],
-        ios_performance_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/ios') ],
-        ios_profile_libpath = [ bld.Path('Gems/Cubism3/3rdParty/release/ios') ],
+        ios_debug_libpath = [ bld.path.abspath() + '/../3rdParty/develop/ios' ],
+        ios_release_libpath = [ bld.path.abspath() + '/../3rdParty/release/ios' ],
+        ios_performance_libpath = [ bld.path.abspath() + '/../3rdParty/release/ios' ],
+        ios_profile_libpath = [ bld.path.abspath() + '/../3rdParty/release/ios' ]
     )

@@ -1,0 +1,101 @@
+{
+	"name": "Cubism3",
+	"source": "@GEM@/3rdParty",
+	"description": "Live 2D Cubism3 Library Core",
+	"includes": [
+		"include"
+	],
+	"lib_required": "True",
+	"platform": {
+		"win_x64_vs2013": {
+			"libpath_debug": [
+				"develop/windows/x86_64"
+			],
+			"libpath_profile": [
+				"release/windows/x86_64"
+			],
+			"libpath_performance": [
+				"release/windows/x86_64"
+			],
+			"libpath_release": [
+				"release/windows/x86_64"
+			],
+			"lib": [
+				"Live2DCubismCore.lib"
+			]
+		},
+		"win_x64_vs2015": "@win_x64_vs2013",
+
+		"linux_x64": {
+			"libpath_debug": [
+				"develop/linux/x86_64"
+			],
+			"libpath_profile": [
+				"release/linux/x86_64"
+			],
+			"libpath_performance": [
+				"release/linux/x86_64"
+			],
+			"libpath_release": [
+				"release/linux/x86_64"
+			],
+			"lib": [
+				"Live2DCubismCore.a"
+			]
+		},
+
+		"android_armv7_gcc": {
+			"libpath_debug": [
+				"develop/windows/armeabi-v7a"
+			],
+			"libpath_profile": [
+				"release/windows/armeabi-v7a"
+			],
+			"libpath_performance": [
+				"release/windows/armeabi-v7a"
+			],
+			"libpath_release": [
+				"release/windows/armeabi-v7a"
+			],
+			"lib": [
+				"Live2DCubismCore.a"
+			]
+		},
+
+		"darwin_x64": {
+			"libpath_debug": [
+				"develop/macos"
+			],
+			"libpath_profile": [
+				"release/macos"
+			],
+			"libpath_performance": [
+				"release/macos"
+			],
+			"libpath_release": [
+				"release/macos"
+			],
+			"lib": [
+				"Live2DCubismCore.a"
+			]
+		},
+
+		"ios": {
+			"libpath_debug": [
+				"develop/ios"
+			],
+			"libpath_profile": [
+				"release/ios"
+			],
+			"libpath_performance": [
+				"release/ios"
+			],
+			"libpath_release": [
+				"release/ios"
+			],
+			"lib": [
+				"Live2DCubismCore.a"
+			]
+		}
+	}
+}
