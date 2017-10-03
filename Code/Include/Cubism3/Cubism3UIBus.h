@@ -1,8 +1,6 @@
-
 #pragma once
 
 namespace Cubism3 {
-
 	#ifndef CUBISM3_MULTITHREAD_LIMITER
 		#define CUBISM3_MULTITHREAD_LIMITER 4
 	#endif
@@ -79,6 +77,7 @@ namespace Cubism3 {
 	};
 	using Cubism3UIBus = AZ::EBus<Cubism3UIInterface>;
 	
+
 	typedef float(*Cubism3AnimationFloatBlend)(float base, float value, float weight);
 
 	class Cubism3AnimationInterface

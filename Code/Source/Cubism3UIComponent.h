@@ -26,6 +26,10 @@
 
 #include "Live2DCubismCore.h"
 
+#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+#include <Live2DCubismFramework.h>
+#endif
+
 namespace Cubism3 {
 	class Cubism3UIComponent
 		: public AZ::Component
@@ -219,6 +223,11 @@ namespace Cubism3 {
 		AZStd::unordered_map<AZStd::string, Cubism3Animation*> m_animations;
 		AZStd::vector<AnimationControl> m_animControls;
 
+	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+	private:
+		csmModelHashTable* m_hashTable;
+	#endif
+
 	private: //parameter stuff
 		ModelParametersGroup m_params;
 
@@ -269,6 +278,12 @@ namespace Cubism3 {
 			virtual void Cancel();
 			virtual void Run() = 0;
 			virtual void WaitTillReady();
+		/*#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+		public:
+			virtual void SetHashTable(csmModelHashTable* hashTable) { this->m_hashTable = hashTable; }
+		protected:
+			csmModelHashTable* m_hashTable;
+		#endif*/
 		protected:
 			bool m_renderOrderChanged;
 		protected:

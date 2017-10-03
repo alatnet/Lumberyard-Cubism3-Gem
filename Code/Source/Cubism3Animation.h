@@ -6,6 +6,11 @@
 #include "Include\Cubism3\Cubism3UIBus.h"
 #include "Cubism3Drawable.h"
 
+
+#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+#include <Live2DCubismFramework.h>
+#endif
+
 namespace Cubism3 {
 	class ModelParametersGroup;
 	class ModelPartsGroup;
@@ -56,6 +61,17 @@ namespace Cubism3 {
 
 	private:
 		void UpdateCurves();
+
+	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+	public:
+		virtual void SetHashTable(csmModelHashTable* hashTable) { this->m_hashTable = hashTable; }
+		virtual void SetModel(csmModel* model) { this->m_model = model; }
+	private:
+		csmModelHashTable* m_hashTable;
+		csmModel* m_model;
+		csmAnimation* m_anim;
+		csmAnimationState m_animState;
+	#endif
 
 	private:
 		bool m_loaded;

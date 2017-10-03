@@ -34,6 +34,10 @@ namespace Cubism3 {
 		this->m_model = nullptr;
 		this->m_texture = nullptr;
 
+	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+		this->m_hashTable = nullptr;
+	#endif
+
 		this->m_modelLoaded = false;
 
 		this->m_threading = NONE;
@@ -690,6 +694,10 @@ namespace Cubism3 {
 				this->m_thread->SetAnimations(&this->m_animations);
 				this->m_thread->SetParams(&this->m_params);
 				this->m_thread->SetParts(&this->m_parts);
+				
+			/*#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+				this->m_thread->SetFloatSink(this->m_sink);
+			#endif*/
 
 				this->m_thread->SetTransformUpdate(this->m_transformUpdated);
 				this->m_thread->SetDelta(gEnv->pSystem->GetITimer()->GetRealFrameTime());
@@ -729,6 +737,10 @@ namespace Cubism3 {
 		if (m_moc) {
 			a->SetParametersAndParts(&this->m_params, &this->m_parts);
 			a->SetDrawables(&this->m_drawables);
+		#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+			a->SetHashTable(this->m_hashTable);
+			a->SetModel(this->m_model);
+		#endif
 		}
 
 		a->Load(asset);
@@ -778,7 +790,7 @@ namespace Cubism3 {
 	void Cubism3UIComponent::SetWeight(AZStd::string name, float weight) { IFANIM(name) a->SetWeight(weight); }
 	float Cubism3UIComponent::GetWeight(AZStd::string name) {
 		IFANIM(name) return a->GetWeight();
-		return false;
+		return 0.0f;
 	}
 
 	void Cubism3UIComponent::SetFloatBlend(AZStd::string name, Cubism3AnimationFloatBlend floatBlendFunc) { IFANIM(name) a->SetFloatBlend(floatBlendFunc); }
@@ -830,6 +842,12 @@ namespace Cubism3 {
 				this->m_model = csmInitializeModelInPlace(this->m_moc, modelBuf, modelSize);
 
 				if (this->m_model) {
+				#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+					unsigned int hashTableSize = csmGetSizeofModelHashTable(this->m_model);
+					void * hashBuf = azmalloc(hashTableSize);
+					this->m_hashTable = csmInitializeModelHashTableInPlace(this->m_model, hashBuf, hashTableSize);
+				#endif
+
 					//get canvas info
 					csmVector2 canvasSize;
 					csmVector2 modelOrigin;
@@ -1011,6 +1029,11 @@ namespace Cubism3 {
 					for (AZStd::pair<AZStd::string, Cubism3Animation*> a : this->m_animations) {
 						a.second->SetParametersAndParts(&this->m_params, &this->m_parts);
 						a.second->SetDrawables(&this->m_drawables);
+
+					#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+						a.second->SetHashTable(this->m_hashTable);
+						a.second->SetModel(this->m_model);
+					#endif
 					}
 
 					this->m_modelLoaded = true;
@@ -1041,6 +1064,10 @@ namespace Cubism3 {
 		for (AZStd::pair<AZStd::string, Cubism3Animation*> a : this->m_animations) {
 			a.second->SetParametersAndParts(nullptr, nullptr);
 			a.second->SetDrawables(nullptr);
+		#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+			a.second->SetHashTable(this->m_hashTable);
+			a.second->SetModel(this->m_model);
+		#endif
 		}
 
 		//delete the drawable update thread
@@ -1070,8 +1097,21 @@ namespace Cubism3 {
 		//if (this->m_model) CryModuleMemalignFree(this->m_model); //free the model
 		//if (this->m_moc) CryModuleMemalignFree(this->m_moc); //free the moc
 
-		if (this->m_model) azfree(this->m_model); //free the model
-		if (this->m_moc) azfree(this->m_moc); //free the moc
+		if (this->m_model) {
+			azfree(this->m_model); //free the model
+			this->m_model = nullptr;
+		}
+		if (this->m_moc) {
+			azfree(this->m_moc); //free the moc
+			this->m_moc = nullptr;
+		}
+
+	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+		if (this->m_hashTable) {
+			azfree(this->m_hashTable);
+			this->m_hashTable = nullptr;
+		}
+	#endif
 
 		this->m_model = nullptr;
 		this->m_moc = nullptr;
@@ -1328,9 +1368,11 @@ namespace Cubism3 {
 			float frametime = gEnv->pSystem->GetITimer()->GetRealFrameTime();
 			for (AZStd::pair<AZStd::string, Cubism3Animation*> a : this->m_animations) a.second->Tick(frametime);
 
+		#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 			//sync animation
 			this->m_params.SyncAnimations();
 			this->m_parts.SyncAnimations();
+		#endif
 
 			//update the model
 			csmUpdateModel(this->m_model);

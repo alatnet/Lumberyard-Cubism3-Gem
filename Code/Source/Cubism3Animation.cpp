@@ -20,6 +20,11 @@ namespace Cubism3 {
 		this->m_playedOnce = false;
 		this->m_playing = false;
 		this->m_drawables = nullptr;
+
+	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+		this->m_anim = nullptr;
+		csmInitializeAnimationState(&this->m_animState);
+	#endif
 	}
 
 	Cubism3Animation::~Cubism3Animation() {
@@ -30,11 +35,16 @@ namespace Cubism3 {
 			}
 			this->m_curves.clear();
 		}
+
+	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+		if (this->m_anim) azfree(this->m_anim);
+	#endif
 	}
 
 	void Cubism3Animation::Load(MotionAssetRef asset) {
 		this->m_loaded = false;
 
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		if (this->m_curves.size() > 0) {
 			for (Curve *c : this->m_curves) { //for each curve.
 				for (int i = 0; i < c->m_segments.size(); i++) delete c->m_segments[i].second; //delete the calculation for each segment
@@ -325,6 +335,35 @@ namespace Cubism3 {
 			}
 		}
 		#endif
+	#else
+		if (this->m_anim) {
+			azfree(this->m_anim);
+			this->m_anim = nullptr;
+		}
+		if (asset.GetAssetPath().empty()) return;
+
+		//load the json file
+		AZ::IO::HandleType fileHandler;
+		gEnv->pFileIO->Open(asset.GetAssetPath().c_str(), AZ::IO::OpenMode::ModeRead | AZ::IO::OpenMode::ModeText, fileHandler);
+
+		AZ::u64 size;
+		gEnv->pFileIO->Size(fileHandler, size);
+
+		char *jsonBuff = (char *)azmalloc(size + 1);
+		gEnv->pFileIO->Read(fileHandler, jsonBuff, size);
+
+		gEnv->pFileIO->Close(fileHandler);
+
+		jsonBuff[size] = '\0';
+
+		unsigned int animSize = csmGetDeserializedSizeofAnimation(jsonBuff);
+		void* animBuff = azmalloc(animSize);
+		this->m_anim = csmDeserializeAnimationInPlace(jsonBuff, animBuff, animSize);
+
+		azfree(jsonBuff);
+
+		this->m_loaded = true;
+	#endif
 
 		this->SetParametersAndParts(this->m_paramGroup, this->m_partsGroup);
 	}
@@ -385,8 +424,12 @@ namespace Cubism3 {
 	void Cubism3Animation::Stop() {
 		this->m_playing = false;
 		this->m_playedOnce = false;
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		this->m_time = 0.0f;
 		this->UpdateCurves();
+	#else
+		csmResetAnimationState(&this->m_animState);
+	#endif
 	}
 
 	void Cubism3Animation::Pause() {
@@ -394,6 +437,7 @@ namespace Cubism3 {
 	}
 
 	void Cubism3Animation::Tick(float delta) {
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		if (this->m_paramGroup == nullptr && this->m_partsGroup == nullptr) return; //if we dont have any parameters or parts to work with dont deal with the animation.
 
 		if (!this->m_playedOnce && this->m_playing) { //if we havent played once and we are playing
@@ -409,12 +453,30 @@ namespace Cubism3 {
 
 			this->UpdateCurves();
 		}
+	#else
+		csmUpdateAnimationState(&this->m_animState, delta);
+		if (this->m_hashTable && this->m_model)
+			csmEvaluateAnimationFAST(
+				this->m_anim,
+				&this->m_animState,
+				this->m_floatBlendFunc,
+				this->m_weight,
+				this->m_model,
+				this->m_hashTable,
+				nullptr,
+				nullptr
+			);
+	#endif
 	}
 
 	void Cubism3Animation::Reset() {
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		this->m_time = 0.0f;
 		this->m_playedOnce = false;
 		this->UpdateCurves();
+	#else
+		csmResetAnimationState(&this->m_animState);
+	#endif
 	}
 
 	void Cubism3Animation::UpdateCurves() {

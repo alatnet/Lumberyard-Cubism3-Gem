@@ -1,23 +1,11 @@
 {
   "auto": {
     "Include/Framework": [
-      "Source/Framework/Live2DCubismFramework.h",
-      "Source/Framework/Live2DCubismFrameworkInternal.h"
+      "Source/Live2DCubismFramework.h",
+      "Source/Live2DCubismFrameworkInternal.h"
     ],
-    "Source/Framework": [
-      "Source/Framework/Animation.c",
-      "Source/Framework/AnimationSegmentEvaluationFunction.c",
-      "Source/Framework/AnimationState.c",
-      "Source/Framework/FloatBlendFunction.c",
-      "Source/Framework/FloatSink.c",
-      "Source/Framework/Hash.c",
-      "Source/Framework/Json.c",
-      "Source/Framework/Local.h",
-      "Source/Framework/ModelExtensions.c",
-      "Source/Framework/MotionJson.c",
-      "Source/Framework/ParameterExtensions.c",
-      "Source/Framework/PartExtensions.c",
-      "Source/Framework/String.c"
+    "Source": [
+		"Source/Cubism3FrameworkCollation.cpp"
     ]
   }
 }

@@ -6,11 +6,11 @@ def build(bld):
             bld.path.abspath() + '/../3rdParty/include'
         ],
 		
-  #      file_list   = [
-		#	'cubism3.waf_files',
-		#	# uncomment this and set CUBISM3_ANIMATION_FRAMEWORK to 1 in defines to use the Cubism3 Framework
-		#	#'cubism3.animation.framework.waf_files',
-		#],
+        file_list   = [
+			'cubism3.waf_files',
+		    # uncomment this and set CUBISM3_ANIMATION_FRAMEWORK to 1 in defines to use the Cubism3 Framework
+			#'cubism3.animation.framework.waf_files',
+		],
 
         debug_win_linkflags = [ '/VERBOSE' ],
 
@@ -33,7 +33,8 @@ def build(bld):
 			# Sets which animation framework to use
 			# 0 - Lumberyard implementation
 			# 1 - Live2D Cubism 3 implementation
-			#'CUBISM3_ANIMATION_FRAMEWORK=0'
+			#'CUBISM3_ANIMATION_FRAMEWORK=1',
+            #'WX_DISABLE' #Important! If there is any errors compiling with the framework, enable this.
 		],
 
         #library

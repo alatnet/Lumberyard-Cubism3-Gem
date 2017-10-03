@@ -54,9 +54,13 @@ namespace Cubism3 {
 			for (AZStd::pair<AZStd::string, Cubism3Animation *> a : *this->m_animations) { a.second->Tick(this->m_delta); }
 			this->m_delta = 0.0f;
 
+		#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 			//sync animation
 			if (this->m_params) this->m_params->SyncAnimations();
 			if (this->m_parts) this->m_parts->SyncAnimations();
+		/*#else
+			if (this->m_sink) csmFlushFloatSink(this->m_sink, this->m_model, nullptr, nullptr);*/
+		#endif
 
 			csmUpdateModel(this->m_model);
 
@@ -218,12 +222,18 @@ namespace Cubism3 {
 			this->m_nextDrawable = 0;
 			this->m_dMutex.Unlock();
 
-			//update and sync animations
+			//update
 			for (AZStd::pair<AZStd::string, Cubism3Animation *> a : *this->m_animations) { a.second->Tick(this->m_delta); }
 			this->m_delta = 0.0f;
+
+		#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
+			//sync animations
 			this->m_params->SyncAnimations();
 			this->m_parts->SyncAnimations();
 			//this->animations = false;
+		/*#else
+			csmFlushFloatSink(this->m_sink, this->m_model, nullptr, nullptr);*/
+		#endif
 
 			//update the model
 			csmUpdateModel(this->m_model);
