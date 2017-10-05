@@ -3,7 +3,9 @@ An Amazon Lumberyard Gem that adds in Live2D Cubism3 functionality to LyShine.
 
 ## Requirements
 To compile the gem, it requires that you have downloaded Cubism3 SDK from [live2d](https://live2d.github.io/#native).  
-Place the SDK\'s develop and release library files in "3rdParty" folder and the SDK\'s include files in "3rdParty\\includes".  
+Place the SDK\'s develop and release library files in "3rdParty" folder and the SDK\'s include files in "3rdParty\\include".  
+To use the native components implementation of Cubism3 animations it is required that you download the latest version from their [github](https://github.com/Live2D/CubismNativeComponents) and place "Live2DCubismFramework.h" and "Live2DCubismFrameworkINTERNAL.h" into "3rdParty\\include" and the Framework source files into "3rdParty\\source\\Framework".  
+Afterwards edit the wscript to enable the implementation.
 
 ## How to have asset listing
 In order to have the editor list Cubism3 assets you will need to add the following to your "Amazon/Lumberyard/\<version\>/dev/AssetProcessorPlatformConfig.ini":  

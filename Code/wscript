@@ -3,14 +3,9 @@ def build(bld):
         #includes
         includes = [
             bld.Path('Code/CryEngine/CryAction'),
-            bld.path.abspath() + '/../3rdParty/include'
+            bld.path.abspath() + '/../3rdParty/include',
+            bld.path.abspath() + '/../3rdParty/source'
         ],
-		
-        file_list   = [
-			'cubism3.waf_files',
-		    # uncomment this and set CUBISM3_ANIMATION_FRAMEWORK to 1 in defines to use the Cubism3 Framework
-			#'cubism3.animation.framework.waf_files',
-		],
 
         debug_win_linkflags = [ '/VERBOSE' ],
 
@@ -34,7 +29,6 @@ def build(bld):
 			# 0 - Lumberyard implementation
 			# 1 - Live2D Cubism 3 implementation
 			#'CUBISM3_ANIMATION_FRAMEWORK=1',
-            #'WX_DISABLE' #Important! If there is any errors compiling with the framework, enable this.
 		],
 
         #library

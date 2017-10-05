@@ -36,7 +36,7 @@ namespace Cubism3 {
 
 	public:
 		void SetParametersAndParts(ModelParametersGroup * paramGroup, ModelPartsGroup * partsGroup);
-		void SetDrawables(AZStd::vector<Cubism3Drawable*> *drawables) { this->m_drawables = drawables; }
+		void SetDrawables(AZStd::vector<Cubism3Drawable*> *drawables);
 
 	public:
 		void SetFloatBlend(Cubism3AnimationFloatBlend floatBlendFunc) { this->m_floatBlendFunc = floatBlendFunc; }
@@ -60,7 +60,9 @@ namespace Cubism3 {
 		void Reset();
 
 	private:
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		void UpdateCurves();
+	#endif
 
 	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
 	public:
@@ -75,13 +77,19 @@ namespace Cubism3 {
 
 	private:
 		bool m_loaded;
+
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		ModelParametersGroup * m_paramGroup;
 		ModelPartsGroup * m_partsGroup;
 		AZStd::vector<Cubism3Drawable*> *m_drawables;
+	#endif
 
 		Cubism3AnimationFloatBlend m_floatBlendFunc;
 
+
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		float m_time;
+	#endif
 		float m_weight;
 		bool m_playedOnce;
 
@@ -89,16 +97,19 @@ namespace Cubism3 {
 
 	private: //meta data
 		struct Meta {
+			bool m_loop;
+		#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 			float m_duration; //end time
 			float m_fps;
-			bool m_loop;
 			unsigned int m_curveCount;
 			unsigned int m_totalSegCount;
 			unsigned int m_totalPointCount;
+		#endif
 		};
 
 		Meta m_meta;
 
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 	private: //Curve stuff
 		enum SegmentType {
 			LINEAR = 0,
@@ -149,6 +160,7 @@ namespace Cubism3 {
 		};
 
 		AZStd::vector<Curve *> m_curves;
+	#endif
 
 	public: //RTTI stuff
 		static void Reflect(AZ::SerializeContext* serializeContext);

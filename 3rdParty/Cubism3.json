@@ -3,7 +3,8 @@
 	"source": "@GEM@/3rdParty",
 	"description": "Live 2D Cubism3 Library Core",
 	"includes": [
-		"include"
+		"include",
+		"source"
 	],
 	"lib_required": "True",
 	"platform": {

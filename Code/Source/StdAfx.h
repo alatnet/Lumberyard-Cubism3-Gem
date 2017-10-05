@@ -7,6 +7,9 @@
 #include <Cry_Math.h>
 #include <ISystem.h>
 
+#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+#define WX_DISABLE
+#endif
 
 //because /WX is fucking with us...
 //quick and easy way to disable and enable a warning

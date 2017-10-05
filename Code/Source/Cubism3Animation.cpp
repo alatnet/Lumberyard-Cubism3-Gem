@@ -1,25 +1,32 @@
 #include "StdAfx.h"
 
+#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 #include <AZCore/JSON/rapidjson.h>
 #include <AZCore/JSON/document.h>
+#endif
 
 #include "Cubism3Animation.h"
-
 #include "Cubism3EditorData.h"
-
 #include "Cubism3UIComponent.h"
+
+#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
+#include "Live2DCubismFrameworkInternal.h"
+#endif
 
 namespace Cubism3 {
 	Cubism3Animation::Cubism3Animation() {
 		this->m_loaded = false;
-		this->m_paramGroup = nullptr;
-		this->m_partsGroup = nullptr;
 		this->m_floatBlendFunc = FloatBlend::Default;
-		this->m_time = 0.0f;
 		this->m_weight = 1.0f;
 		this->m_playedOnce = false;
 		this->m_playing = false;
+
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
+		this->m_time = 0.0f;
+		this->m_paramGroup = nullptr;
+		this->m_partsGroup = nullptr;
 		this->m_drawables = nullptr;
+	#endif
 
 	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
 		this->m_anim = nullptr;
@@ -28,6 +35,7 @@ namespace Cubism3 {
 	}
 
 	Cubism3Animation::~Cubism3Animation() {
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		if (this->m_curves.size() > 0) {
 			for (Curve *c : this->m_curves) { //for each curve.
 				for (int i = 0; i < c->m_segments.size(); i++) delete c->m_segments[i].second; //delete the calculation for each segment
@@ -35,6 +43,7 @@ namespace Cubism3 {
 			}
 			this->m_curves.clear();
 		}
+	#endif
 
 	#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
 		if (this->m_anim) azfree(this->m_anim);
@@ -335,6 +344,8 @@ namespace Cubism3 {
 			}
 		}
 		#endif
+
+		this->SetParametersAndParts(this->m_paramGroup, this->m_partsGroup);
 	#else
 		if (this->m_anim) {
 			azfree(this->m_anim);
@@ -362,13 +373,14 @@ namespace Cubism3 {
 
 		azfree(jsonBuff);
 
+		this->m_meta.m_loop = (this->m_anim->Loop != 0);
+
 		this->m_loaded = true;
 	#endif
-
-		this->SetParametersAndParts(this->m_paramGroup, this->m_partsGroup);
 	}
 
 	void Cubism3Animation::SetParametersAndParts(ModelParametersGroup * paramGroup, ModelPartsGroup * partsGroup){
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		if (paramGroup == nullptr || partsGroup == nullptr) {
 			this->m_paramGroup = nullptr;
 			this->m_partsGroup = nullptr;
@@ -397,6 +409,17 @@ namespace Cubism3 {
 			//*this->m_paramGroup->at(0)->val = 0.0f;
 			//*this->m_partsGroup->at(0)->val = 0.0f;
 		}
+	#else
+		return;
+	#endif
+	}
+
+	void Cubism3Animation::SetDrawables(AZStd::vector<Cubism3Drawable*> *drawables) {
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
+		this->m_drawables = drawables;
+	#else
+		return;
+	#endif
 	}
 
 	void Cubism3Animation::SetLooping(bool looping) {
@@ -409,11 +432,19 @@ namespace Cubism3 {
 	}
 
 	bool Cubism3Animation::IsStopped() {
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		return this->m_playing && (this->m_time == 0.0f || this->m_time == this->m_meta.m_duration);
+	#else
+		return this->m_playing && (this->m_animState.Time == 0.0f || this->m_animState.Time == this->m_anim->Duration);
+	#endif
 	}
 
 	bool Cubism3Animation::IsPaused() {
+	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		return this->m_playing && (this->m_time != 0.0f || this->m_time != this->m_meta.m_duration);
+	#else
+		return this->m_playing && (this->m_animState.Time != 0.0f || this->m_animState.Time != this->m_anim->Duration);
+	#endif
 	}
 
 	void Cubism3Animation::Play() {
@@ -429,6 +460,7 @@ namespace Cubism3 {
 		this->UpdateCurves();
 	#else
 		csmResetAnimationState(&this->m_animState);
+		this->Tick(0);
 	#endif
 	}
 
@@ -454,31 +486,43 @@ namespace Cubism3 {
 			this->UpdateCurves();
 		}
 	#else
-		csmUpdateAnimationState(&this->m_animState, delta);
-		if (this->m_hashTable && this->m_model)
-			csmEvaluateAnimationFAST(
-				this->m_anim,
-				&this->m_animState,
-				this->m_floatBlendFunc,
-				this->m_weight,
-				this->m_model,
-				this->m_hashTable,
-				nullptr,
-				nullptr
-			);
+		if (this->m_playing && !this->m_playedOnce) {
+			csmUpdateAnimationState(&this->m_animState, delta);
+			if (this->m_hashTable && this->m_model)
+				csmEvaluateAnimationFAST(
+					this->m_anim,
+					&this->m_animState,
+					this->m_floatBlendFunc,
+					this->m_weight,
+					this->m_model,
+					this->m_hashTable,
+					nullptr,
+					nullptr
+				);
+
+			if (this->m_animState.Time > this->m_anim->Duration) {
+				if (!this->m_meta.m_loop) {
+					this->m_playedOnce = true; //make sure that we dont loop
+					this->m_playing = false; //make sure we are stopped
+					csmResetAnimationState(&this->m_animState);
+				}
+			}
+		}
 	#endif
 	}
 
 	void Cubism3Animation::Reset() {
+		this->m_playedOnce = false;
 	#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 		this->m_time = 0.0f;
-		this->m_playedOnce = false;
 		this->UpdateCurves();
 	#else
 		csmResetAnimationState(&this->m_animState);
+		this->Tick(0);
 	#endif
 	}
 
+#if !defined(CUBISM3_ANIMATION_FRAMEWORK) || CUBISM3_ANIMATION_FRAMEWORK == 0
 	void Cubism3Animation::UpdateCurves() {
 		for (Curve * c : this->m_curves) { //for each curve
 			float val = 0.0f;
@@ -540,6 +584,7 @@ namespace Cubism3 {
 
 		return Lerp(p012,p123,t).second;
 	}
+#endif
 
 	void Cubism3Animation::Reflect(AZ::SerializeContext* serializeContext) {
 		serializeContext->Class<Cubism3Animation>()
