@@ -1065,8 +1065,8 @@ namespace Cubism3 {
 			a.second->SetParametersAndParts(nullptr, nullptr);
 			a.second->SetDrawables(nullptr);
 		#if defined(CUBISM3_ANIMATION_FRAMEWORK) && CUBISM3_ANIMATION_FRAMEWORK == 1
-			a.second->SetHashTable(this->m_hashTable);
-			a.second->SetModel(this->m_model);
+			a.second->SetHashTable(nullptr);
+			a.second->SetModel(nullptr);
 		#endif
 		}
 
