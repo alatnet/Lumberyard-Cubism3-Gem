@@ -13,8 +13,7 @@
 #include <AzCore/Component/Component.h>
 #include <AzCore/Serialization/SerializeContext.h>
 
-//#include "../../Engine/LmbrCentral/include/LmbrCentral/Rendering/MaterialAsset.h"
-#include <../../LmbrCentral/Code/include/LmbrCentral/Rendering/MaterialAsset.h>
+#include <LmbrCentral\Rendering\MaterialAsset.h>
 
 #include "Cubism3Assets.h"
 #include "Cubism3EditorData.h"

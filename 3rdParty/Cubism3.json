@@ -47,19 +47,19 @@
 
 		"android_armv7_gcc": {
 			"libpath_debug": [
-				"develop/windows/armeabi-v7a"
+				"develop/android/armeabi-v7a"
 			],
 			"libpath_profile": [
-				"release/windows/armeabi-v7a"
+				"release/android/armeabi-v7a"
 			],
 			"libpath_performance": [
-				"release/windows/armeabi-v7a"
+				"release/android/armeabi-v7a"
 			],
 			"libpath_release": [
-				"release/windows/armeabi-v7a"
+				"release/android/armeabi-v7a"
 			],
 			"lib": [
-				"Live2DCubismCore.a"
+				"libLive2DCubismCore.a"
 			]
 		},
 

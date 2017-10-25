@@ -116,3 +116,8 @@ namespace Cubism3 {
 
 	using Cubism3AnimationBus = AZ::EBus<Cubism3AnimationInterface>;
 } // namespace Cubism3
+
+namespace AZ {
+	AZ_TYPE_INFO_SPECIALIZE(Cubism3::Cubism3UIInterface::Threading, "{6F52376F-69C4-4337-9ED3-956FDD6BFCA9}");
+	AZ_TYPE_INFO_SPECIALIZE(Cubism3::Cubism3UIInterface::LoadType, "{822167BA-5A15-4F30-95B5-9DBAFBC9FE57}");
+}

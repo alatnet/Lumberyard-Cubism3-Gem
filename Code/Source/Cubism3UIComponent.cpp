@@ -343,16 +343,20 @@ namespace Cubism3 {
 
 		AZ::BehaviorContext* behaviorContext = azrtti_cast<AZ::BehaviorContext*>(context);
 		if (behaviorContext) {
-			behaviorContext->Class<Cubism3UIComponent>("Cubism3UI")
-				->Enum<Cubism3UIInterface::LoadType::Single>("ltSingle")
-				->Enum<Cubism3UIInterface::LoadType::JSON>("ltJSON")
-				->Enum<Cubism3UIInterface::Threading::NONE>("tNone")
-				->Enum<Cubism3UIInterface::Threading::SINGLE>("tSingle")
-				->Enum<Cubism3UIInterface::Threading::MULTI>("tMulti")
-				;
+			behaviorContext->Class<Cubism3UIInterface::LoadType>("Cubism3LoadType")
+				->Attribute(AZ::Script::Attributes::Category, "Cubism3")
+				->Enum<Cubism3UIInterface::LoadType::Single>("Single")
+				->Enum<Cubism3UIInterface::LoadType::JSON>("JSON");
+
+			behaviorContext->Class<Cubism3UIInterface::Threading>("Cubism3Threading")
+				->Attribute(AZ::Script::Attributes::Category, "Cubism3")
+				->Enum<Cubism3UIInterface::Threading::NONE>("None")
+				->Enum<Cubism3UIInterface::Threading::SINGLE>("Single")
+				->Enum<Cubism3UIInterface::Threading::MULTI>("Multi");
 
 			#define EBUS_METHOD(name) ->Event(#name, &Cubism3UIBus::Events::##name##)
 			behaviorContext->EBus<Cubism3UIBus>("Cubism3UIBus")
+				->Attribute(AZ::Script::Attributes::Category, "Cubism3")
 				//load type
 				EBUS_METHOD(SetLoadType)
 				EBUS_METHOD(GetLoadType)
@@ -398,6 +402,7 @@ namespace Cubism3 {
 
 			#define EBUS_METHOD(name) ->Event(#name, &Cubism3AnimationBus::Events::##name##)
 			behaviorContext->EBus<Cubism3AnimationBus>("Cubism3AnimationBus")
+				->Attribute(AZ::Script::Attributes::Category, "Cubism3")
 				EBUS_METHOD(AddAnimation)
 				EBUS_METHOD(RemoveAnimation)
 				EBUS_METHOD(Loaded)

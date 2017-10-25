@@ -15,9 +15,9 @@ namespace Cubism3
     {
         if (AZ::SerializeContext* serialize = azrtti_cast<AZ::SerializeContext*>(context))
         {
-			AzFramework::SimpleAssetReference<MocAsset>::Register(*serialize);
-			AzFramework::SimpleAssetReference<Cubism3Asset>::Register(*serialize);
-			AzFramework::SimpleAssetReference<Cubism3::MotionAsset>::Register(*serialize);
+			MocAssetRef::Register(*serialize);
+			Cubism3AssetRef::Register(*serialize);
+			MotionAssetRef::Register(*serialize);
 
             serialize->Class<Cubism3SystemComponent, AZ::Component>()
                 ->Version(0)
