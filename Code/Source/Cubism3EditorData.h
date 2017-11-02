@@ -5,10 +5,6 @@
 #include "Cubism3Animation.h"
 
 namespace Cubism3 {
-	struct ElementInfo {
-		AZ::Uuid m_uuid;                    // Type uuid for the class field that should use this edit data.
-		AZ::Edit::ElementData m_editData;   // Edit metadata (name, description, attribs, etc).
-	};
 	class ModelAnimation {
 	public: //animation stuff
 		float m_animVal;
@@ -24,19 +20,20 @@ namespace Cubism3 {
 		AZ_RTTI(ModelParameter, "{F804F1A2-F3F5-4489-B326-2906F90FCB0F}");
 
 	public:
+		ModelParameter() : m_name(""), m_id(0), m_min(0.0f), m_max(0.0f), m_val(0.0f) {}
+	public:
 		virtual ~ModelParameter() {}
 		AZStd::string m_name;
 		int m_id;
 		float m_min, m_max;
-		float *m_val;
+		float *m_pVal;
+		float m_val;
 		
 	public:
 		void SyncAnimation();
 
-	public: //editor stuff
-		//AZ::Edit::ElementData ed;
-		ElementInfo m_ei;
-		void InitEdit();
+	public:
+		void SyncEditorVals();
 
 	public: //RTTI stuff
 		static void Reflect(AZ::SerializeContext* serializeContext);
@@ -48,7 +45,7 @@ namespace Cubism3 {
 		AZ_TYPE_INFO(ModelParametersGroup, "{0C617BC0-697E-4BEA-856B-F56776D7C32B}");
 
 	public:
-		AZStd::string m_name;
+		//AZStd::string m_name;
 		AZStd::vector<ModelParameter*> m_params;
 		AZStd::unordered_map<AZStd::string, int> m_idMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
@@ -62,7 +59,7 @@ namespace Cubism3 {
 		void SyncAnimations() { for (ModelParameter * p : this->m_params) if (p->m_animDirty) p->SyncAnimation(); }
 
 	public:
-		ModelParametersGroup() : m_name("Parameters") {}
+		ModelParametersGroup() /*: m_name("Parameters")*/ {}
 		~ModelParametersGroup() { Clear(); }
 
 	public:
@@ -83,18 +80,19 @@ namespace Cubism3 {
 		AZ_RTTI(ModelPart, "{0E84D0AB-9ECF-4654-BD50-7D16D816C554}");
 
 	public:
+		ModelPart() : m_name(""), m_id(0), m_val(0.0f) {}
+	public:
 		virtual ~ModelPart() {}
 		AZStd::string m_name;
 		int m_id;
-		float *m_val;
+		float *m_pVal;
+		float m_val;
 
 	public:
 		void SyncAnimation();
 
-	public: //editor stuff
-		//AZ::Edit::ElementData ed;
-		ElementInfo m_ei;
-		void InitEdit();
+	public:
+		void SyncEditorVals();
 
 	public: //RTTI stuff
 		static void Reflect(AZ::SerializeContext* serializeContext);
@@ -106,7 +104,7 @@ namespace Cubism3 {
 		AZ_TYPE_INFO(ModelPartsGroup, "{59D3B9A9-E175-40C4-896A-AD85C8DE7D4F}");
 
 	public:
-		AZStd::string m_name;
+		//AZStd::string m_name;
 		AZStd::vector<ModelPart*> m_parts;
 		AZStd::unordered_map<AZStd::string, int> m_idMap; //using a map/hash table should be faster in finding indexes by name rather than searching for it sequentially.
 
@@ -120,7 +118,7 @@ namespace Cubism3 {
 		void SyncAnimations() { for (ModelPart * p : this->m_parts) if (p->m_animDirty) p->SyncAnimation(); }
 
 	public:
-		ModelPartsGroup() : m_name("Parts") {}
+		ModelPartsGroup() /*: m_name("Parts")*/ {}
 		~ModelPartsGroup() { Clear(); }
 
 	public:
@@ -149,7 +147,6 @@ namespace Cubism3 {
 	private:
 		AzFramework::SimpleAssetReference<MotionAsset> m_asset;
 		AZStd::string m_assetPath;
-		//AZ::EntityId entId;
 		Cubism3UIComponent * m_component;
 
 	public:
@@ -162,7 +159,6 @@ namespace Cubism3 {
 		void OnBlendingChange();
 
 	public:
-		//void SetEntityID(AZ::EntityId id) { this->entId = id; }
 		void SetUIComponent(Cubism3UIComponent * component) { this->m_component = component; }
 		bool IsLoaded() { return this->m_loaded; }
 

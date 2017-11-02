@@ -71,12 +71,6 @@ namespace Cubism3 {
 
 		static void Reflect(AZ::ReflectContext* context);
 
-	private: //dynamic editor listing
-		static const AZ::Edit::ElementData* GetEditData(const void* handlerPtr, const void* elementPtr, const AZ::Uuid& elementType);
-		const AZ::Edit::ElementData* GetDataElement(const void* element, const AZ::Uuid& typeUuid) const;
-		
-		AZStd::unordered_map<const void*, ElementInfo*> m_dataElements;
-
 	public:
 		// UiRenderInterface
 		void Render() override;

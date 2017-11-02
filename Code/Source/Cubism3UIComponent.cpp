@@ -180,8 +180,6 @@ namespace Cubism3 {
 					->Attribute(AZ::Edit::Attributes::Min, 0.0f)
 					->Attribute(AZ::Edit::Attributes::Max, 1.0f);
 
-				editInfo->SetDynamicEditDataProvider(&Cubism3UIComponent::GetEditData);
-
 				//parameters group
 				{
 					editInfo->DataElement(0, &Cubism3UIComponent::m_params, "Parameters", "List of parameters of the model.");
@@ -194,6 +192,15 @@ namespace Cubism3 {
 					editInfo->DataElement(0, &Cubism3UIComponent::m_parts, "Parts", "List of parts of the model.");
 					ModelPart::ReflectEdit(ec);
 					ModelPartsGroup::ReflectEdit(ec);
+					/*
+					group
+					-m_parts
+					--show children only
+					*/
+					/*editInfo->ClassElement(AZ::Edit::ClassElements::Group, "Parts") //does not have expand group section?
+						->Attribute(AZ::Edit::Attributes::DescriptionTextOverride, "List of parts of the model.")
+					->DataElement(0, &Cubism3UIComponent::m_parts, "Parts", "List of parts of the model.")
+						->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly);*/
 				}
 
 				//animation group
@@ -422,22 +429,6 @@ namespace Cubism3 {
 		}
 	}
 
-	//dynamic listing stuff
-	const AZ::Edit::ElementData* Cubism3UIComponent::GetEditData(const void* handlerPtr, const void* elementPtr, const AZ::Uuid& elementType) {
-		const Cubism3UIComponent * owner = reinterpret_cast<const Cubism3UIComponent*>(handlerPtr);
-		return owner->GetDataElement(elementPtr, elementType);
-	}
-	const AZ::Edit::ElementData* Cubism3UIComponent::GetDataElement(const void* element, const AZ::Uuid& typeUuid) const {
-		auto it = m_dataElements.find(element);
-		if (it != m_dataElements.end()) {
-			if (it->second->m_uuid == typeUuid) {
-				return &it->second->m_editData;
-			}
-		}
-
-		return nullptr;
-	}
-
 	// UiRenderInterface
 	void Cubism3UIComponent::Render() {
 		this->m_threadMutex.Lock();
@@ -622,11 +613,15 @@ namespace Cubism3 {
 	}
 	float Cubism3UIComponent::GetParameterValueI(int index) {
 		if (index < 0 || index >= this->m_params.size()) return -1;
-		return *(this->m_params.at(index)->m_val);
+		return *(this->m_params.at(index)->m_pVal);
 	}
 	void Cubism3UIComponent::SetParameterValueI(int index, float value) {
 		if (index < 0 || index >= this->m_params.size()) return;
-		*(this->m_params.at(index)->m_val) = value;
+		//*(this->m_params.at(index)->m_val) = value;
+
+		auto param = this->m_params.at(index);
+		param->m_val = value;
+		param->SyncEditorVals();
 	}
 
 	//parameters by name
@@ -646,11 +641,15 @@ namespace Cubism3 {
 	//parts by index
 	float Cubism3UIComponent::GetPartOpacityI(int index) {
 		if (index < 0 || index >= this->m_parts.size()) return -1;
-		return *(this->m_parts.at(index)->m_val);
+		return *(this->m_parts.at(index)->m_pVal);
 	}
 	void Cubism3UIComponent::SetPartOpacityI(int index, float value) {
 		if (index < 0 || index >= this->m_parts.size()) return;
-		*(this->m_parts.at(index)->m_val) = value;
+		//*(this->m_parts.at(index)->m_val) = value;
+
+		auto param = this->m_parts.at(index);
+		param->m_val = value;
+		param->SyncEditorVals();
 	}
 
 	//parts by name
@@ -820,6 +819,7 @@ namespace Cubism3 {
 	}
 
 	void Cubism3UIComponent::LoadMoc() {
+		if (!gEnv) return;
 		if (this->m_mocPathname.GetAssetPath().empty()) return;
 
 		//read moc file
@@ -875,16 +875,12 @@ namespace Cubism3 {
 							p->m_name = AZStd::string(paramNames[i]);
 							p->m_min = csmGetParameterMinimumValues(this->m_model)[i];
 							p->m_max = csmGetParameterMaximumValues(this->m_model)[i];
-							p->m_val = &csmGetParameterValues(this->m_model)[i];
-							p->m_animVal = *p->m_val;
+							p->m_pVal = &csmGetParameterValues(this->m_model)[i];
+							p->m_animVal = p->m_val = *p->m_pVal;
 							p->m_animDirty = false;
 
 							this->m_params.m_params.push_back(p);
 							this->m_params.m_idMap[p->m_name] = p->m_id;
-
-							//editor data
-							p->InitEdit();
-							this->m_dataElements.insert(AZStd::make_pair(p->m_val, &p->m_ei));
 						}
 						this->m_params.m_params.shrink_to_fit(); //free up unused memory
 					} else { //if we are loading a component
@@ -893,15 +889,13 @@ namespace Cubism3 {
 							this->m_params.m_idMap[p->m_name] = p->m_id;
 							p->m_min = csmGetParameterMinimumValues(this->m_model)[p->m_id];
 							p->m_max = csmGetParameterMaximumValues(this->m_model)[p->m_id];
-							float savedVal = *p->m_val;
-							p->m_val = &csmGetParameterValues(this->m_model)[i];
-							*p->m_val = savedVal;
-							p->m_animVal = savedVal;
+							//float savedVal = *p->m_val;
+							p->m_pVal = &csmGetParameterValues(this->m_model)[i];
+							//*p->m_val = savedVal;
+							//p->SyncEditorVals();
+							p->m_val = *p->m_pVal;
+							//p->m_animVal = savedVal;
 							p->m_animDirty = false;
-
-							//editor data
-							p->InitEdit();
-							this->m_dataElements.insert(AZStd::make_pair(p->m_val, &p->m_ei));
 						}
 						this->m_params.m_params.shrink_to_fit(); //free up unused memory
 					}
@@ -913,31 +907,25 @@ namespace Cubism3 {
 							ModelPart * p = new ModelPart;
 							p->m_id = i;
 							p->m_name = AZStd::string(partsNames[i]);
-							p->m_val = &csmGetPartOpacities(this->m_model)[i];
-							p->m_animVal = *p->m_val;
+							p->m_pVal = &csmGetPartOpacities(this->m_model)[i];
+							p->m_animVal = p->m_val = *p->m_pVal;
 							p->m_animDirty = false;
 
 							this->m_parts.m_parts.push_back(p);
 							this->m_parts.m_idMap[p->m_name] = p->m_id;
-
-							//editor data
-							p->InitEdit();
-							this->m_dataElements.insert(AZStd::make_pair(p->m_val, &p->m_ei));
 						}
 						this->m_parts.m_parts.shrink_to_fit(); //free up unused memory
 					} else { //if we are loading a component
 						for (int i = 0; i < this->m_parts.size(); i++) {
 							ModelPart * p = this->m_parts.at(i);
 							this->m_parts.m_idMap[p->m_name] = p->m_id;
-							float savedVal = *p->m_val;
-							p->m_val = &csmGetPartOpacities(this->m_model)[i];
-							*p->m_val = savedVal;
-							p->m_animVal = savedVal;
+							//float savedVal = *p->m_val;
+							p->m_pVal = &csmGetPartOpacities(this->m_model)[i];
+							//*p->m_val = savedVal;
+							//p->SyncEditorVals();
+							p->m_val = *p->m_pVal;
+							//p->m_animVal = savedVal;
 							p->m_animDirty = false;
-
-							//editor data
-							p->InitEdit();
-							this->m_dataElements.insert(AZStd::make_pair(p->m_val, &p->m_ei));
 						}
 						this->m_parts.m_parts.shrink_to_fit(); //free up unused memory
 					}
@@ -1097,7 +1085,6 @@ namespace Cubism3 {
 
 		this->m_params.Clear();
 		this->m_parts.Clear();
-		this->m_dataElements.clear(); //clear all editor data
 
 		//if (this->m_model) CryModuleMemalignFree(this->m_model); //free the model
 		//if (this->m_moc) CryModuleMemalignFree(this->m_moc); //free the moc
@@ -1123,6 +1110,7 @@ namespace Cubism3 {
 	}
 
 	void Cubism3UIComponent::LoadTexture() {
+		if (!gEnv) return;
 		if (m_lType == Single) {
 			if (this->m_imagePathname.GetAssetPath().empty()) return;
 			//load the texture

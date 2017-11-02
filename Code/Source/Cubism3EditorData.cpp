@@ -11,15 +11,6 @@
 namespace Cubism3 {
 	//----------------------------------------------------------------------------------
 	//Model Parameters Stuff
-	void ModelParameter::InitEdit() {
-		this->m_ei.m_uuid = AZ::SerializeTypeInfo<float>::GetUuid();
-		this->m_ei.m_editData.m_elementId = AZ::Edit::UIHandlers::Slider;
-		this->m_ei.m_editData.m_name = this->m_name.c_str();
-		this->m_ei.m_editData.m_description = this->m_name.c_str();
-		this->m_ei.m_editData.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Max, aznew AZ::Edit::AttributeData<float>(this->m_max))); //parameter min
-		this->m_ei.m_editData.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Min, aznew AZ::Edit::AttributeData<float>(this->m_min))); //parameter max
-	}
-
 	void ModelParameter::Reflect(AZ::SerializeContext* serializeContext) {
 		serializeContext->Class<ModelParameter>()
 			->Version(1)
@@ -29,15 +20,24 @@ namespace Cubism3 {
 	}
 
 	void ModelParameter::SyncAnimation() {
-		*this->m_val = m_animVal;
+		*this->m_pVal = m_animVal;
+		this->m_val = m_animVal;
 		this->m_animDirty = false;
+	}
+
+	void ModelParameter::SyncEditorVals() {
+		*this->m_pVal = this->m_val;
 	}
 
 	void ModelParameter::ReflectEdit(AZ::EditContext* ec) {
 		ec->Class<ModelParameter>("Parameter", "A Model Parameter")
 			->ClassElement(AZ::Edit::ClassElements::EditorData, "Parameter Attribute.")
 				->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly)
-			->DataElement(AZ::Edit::UIHandlers::Slider, &ModelParameter::m_val, "val", "A float");
+			->DataElement(AZ::Edit::UIHandlers::Slider, &ModelParameter::m_val, "val", "A float")
+				->Attribute(AZ::Edit::Attributes::ChangeNotify, &ModelParameter::SyncEditorVals)
+				->Attribute(AZ::Edit::Attributes::NameLabelOverride, &ModelParameter::m_name)
+				->Attribute(AZ::Edit::Attributes::Max, &ModelParameter::m_max)
+				->Attribute(AZ::Edit::Attributes::Min, &ModelParameter::m_min);
 	}
 
 	void ModelParametersGroup::Clear() {
@@ -50,7 +50,7 @@ namespace Cubism3 {
 	void ModelParametersGroup::Reflect(AZ::SerializeContext* serializeContext) {
 		serializeContext->Class<ModelParametersGroup>()
 			->Version(1)
-			->Field("Name", &ModelParametersGroup::m_name)
+			//->Field("Name", &ModelParametersGroup::m_name)
 			->Field("Params", &ModelParametersGroup::m_params);
 	}
 
@@ -63,7 +63,7 @@ namespace Cubism3 {
 	void ModelParametersGroup::ReflectEdit(AZ::EditContext* ec) {
 		ec->Class<ModelParametersGroup>("A Models parameter group", "This is a model group")
 			->ClassElement(AZ::Edit::ClassElements::EditorData, "ModelParametersGroup's class attributes.")
-				->Attribute(AZ::Edit::Attributes::NameLabelOverride, &ModelParametersGroup::m_name)
+				->Attribute(AZ::Edit::Attributes::NameLabelOverride, /*&ModelParametersGroup::m_name*/ "Parameters")
 				->Attribute(AZ::Edit::Attributes::AutoExpand, false)
 			->DataElement(0, &ModelParametersGroup::m_params, "m_params", "Parameters in this property group")
 				->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly);
@@ -72,15 +72,6 @@ namespace Cubism3 {
 
 	//----------------------------------------------------------------------------------
 	//Model Parts Stuff
-	void ModelPart::InitEdit() {
-		this->m_ei.m_uuid = AZ::SerializeTypeInfo<float>::GetUuid();
-		this->m_ei.m_editData.m_elementId = AZ::Edit::UIHandlers::Slider;
-		this->m_ei.m_editData.m_name = this->m_name.c_str();
-		this->m_ei.m_editData.m_description = this->m_name.c_str();
-		this->m_ei.m_editData.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Max, aznew AZ::Edit::AttributeData<float>(1.0f))); //opacity max
-		this->m_ei.m_editData.m_attributes.push_back(AZ::Edit::AttributePair(AZ::Edit::Attributes::Min, aznew AZ::Edit::AttributeData<float>(0.0f))); //opacity min
-	}
-
 	void ModelPart::Reflect(AZ::SerializeContext* serializeContext) {
 		serializeContext->Class<ModelPart>()
 			->Version(1)
@@ -90,15 +81,24 @@ namespace Cubism3 {
 	}
 
 	void ModelPart::SyncAnimation() {
-		*this->m_val = m_animVal;
+		*this->m_pVal = m_animVal;
+		this->m_val = m_animVal;
 		this->m_animDirty = false;
+	}
+
+	void ModelPart::SyncEditorVals() {
+		*this->m_pVal = m_val;
 	}
 
 	void ModelPart::ReflectEdit(AZ::EditContext* ec) {
 		ec->Class<ModelPart>("Part", "A Part Opacity")
 			->ClassElement(AZ::Edit::ClassElements::EditorData, "Part Opacity.")
 				->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly)
-			->DataElement(AZ::Edit::UIHandlers::Slider, &ModelPart::m_val, "val", "A float");
+			->DataElement(AZ::Edit::UIHandlers::Slider, &ModelPart::m_val, "val", "A float")
+				->Attribute(AZ::Edit::Attributes::ChangeNotify, &ModelPart::SyncEditorVals)
+				->Attribute(AZ::Edit::Attributes::NameLabelOverride, &ModelPart::m_name)
+				->Attribute(AZ::Edit::Attributes::Max, 1.0f)
+				->Attribute(AZ::Edit::Attributes::Min, 0.0f);
 	}
 
 	void ModelPartsGroup::Clear() {
@@ -111,7 +111,7 @@ namespace Cubism3 {
 	void ModelPartsGroup::Reflect(AZ::SerializeContext* serializeContext) {
 		serializeContext->Class<ModelPartsGroup>()
 			->Version(1)
-			->Field("Name", &ModelPartsGroup::m_name)
+			//->Field("Name", &ModelPartsGroup::m_name)
 			->Field("Parts", &ModelPartsGroup::m_parts);
 	}
 
@@ -124,7 +124,7 @@ namespace Cubism3 {
 	void ModelPartsGroup::ReflectEdit(AZ::EditContext* ec) {
 		ec->Class<ModelPartsGroup>("A Parts opacity group", "This is a model group")
 			->ClassElement(AZ::Edit::ClassElements::EditorData, "ModelPartsGroup's class attributes.")
-				->Attribute(AZ::Edit::Attributes::NameLabelOverride, &ModelPartsGroup::m_name)
+				->Attribute(AZ::Edit::Attributes::NameLabelOverride, /*&ModelPartsGroup::m_name*/ "Parts")
 				->Attribute(AZ::Edit::Attributes::AutoExpand, false)
 			->DataElement(0, &ModelPartsGroup::m_parts, "m_parts", "Parts in this property group")
 				->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly);
@@ -143,73 +143,24 @@ namespace Cubism3 {
 	}
 
 	void AnimationControl::OnPlayPause() {
-		/*if (this->entId.IsValid() && this->loaded) {
-			bool isPlaying = false;
-			EBUS_EVENT_ID_RESULT(isPlaying, this->entId, Cubism3AnimationBus, IsPlaying, this->assetPath);
-
-			if (isPlaying) EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Pause, this->assetPath);
-			else EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Play, this->assetPath);
-		}*/
-
 		if (this->m_component) {
 			if (this->m_component->IsPlaying(this->m_assetPath)) this->m_component->Pause(this->m_assetPath);
 			else this->m_component->Play(this->m_assetPath);
 		}
 	}
 	void AnimationControl::OnStop() {
-		/*if (this->entId.IsValid() && this->loaded)
-			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Stop, this->assetPath);*/
-
 		if (this->m_component) this->m_component->Stop(this->m_assetPath);
 	}
 	void AnimationControl::OnReset() {
-		/*if (this->entId.IsValid() && this->loaded)
-			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, Reset, this->assetPath);*/
-
 		if (this->m_component) this->m_component->Reset(this->m_assetPath);
 	}
 	void AnimationControl::OnLoopChange() {
-		/*if (this->entId.IsValid() && this->loaded)
-			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetLooping, this->assetPath, this->loop);*/
-
 		if (this->m_component) this->m_component->SetLooping(this->m_assetPath, this->m_loop);
 	}
 	void AnimationControl::OnWeightChange() {
-		/*if (this->entId.IsValid() && this->loaded)
-			EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetWeight, this->assetPath, this->weight);*/
-
 		if (this->m_component) this->m_component->SetWeight(this->m_assetPath, this->m_weight);
 	}
 	void AnimationControl::OnAssetChange() {
-		/*if (this->entId.IsValid()) {
-			if (!this->asset.GetAssetPath().empty()) {
-				this->assetPath = this->asset.GetAssetPath();
-				EBUS_EVENT_ID_RESULT(this->loaded, this->entId, Cubism3AnimationBus, AddAnimation, this->assetPath);
-				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetLooping, this->assetPath, this->loop);
-				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetWeight, this->assetPath, this->weight);
-
-				switch (this->blending) {
-				case 0:
-					if (this->entId.IsValid() && this->loaded)
-						EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetFloatBlend, this->assetPath, Cubism3::FloatBlend::Default);
-					break;
-				case 1:
-					if (this->entId.IsValid() && this->loaded)
-						EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetFloatBlend, this->assetPath, Cubism3::FloatBlend::Additive);
-					break;
-				}
-
-				if (this->loaded)
-					CLOG("[Cubism3] Animation Asset Loaded. - %s", this->assetPath.c_str());
-				else
-					CLOG("[Cubism3] Animation Asset did not load. - %s", this->assetPath.c_str());
-			} else {
-				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, RemoveAnimation, this->assetPath);
-				this->assetPath = "";
-				this->loaded = false;
-			}
-		}*/
-
 		if (this->m_component) {
 			if (!this->m_asset.GetAssetPath().empty()) {
 				this->m_assetPath = this->m_asset.GetAssetPath();
@@ -237,18 +188,7 @@ namespace Cubism3 {
 			}
 		}
 	}
-	void AnimationControl::OnBlendingChange() {
-		/*switch (this->blending) {
-		case 0:
-			if (this->entId.IsValid() && this->loaded)
-				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetFloatBlend, this->assetPath, Cubism3::FloatBlend::Default);
-			break;
-		case 1:
-			if (this->entId.IsValid() && this->loaded)
-				EBUS_EVENT_ID(this->entId, Cubism3AnimationBus, SetFloatBlend, this->assetPath, Cubism3::FloatBlend::Additive);
-			break;
-		}*/
-		
+	void AnimationControl::OnBlendingChange() {		
 		switch (this->m_blending) {
 		case 0:
 			this->m_component->SetFloatBlend(this->m_assetPath, Cubism3::FloatBlend::Default);
